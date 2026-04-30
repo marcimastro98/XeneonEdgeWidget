@@ -12,4 +12,4 @@ if errorlevel 1 (
   exit /b 1
 )
 
-start "Xenon Edge Widget" /min node server.js
+start "Xenon Edge Widget" /min node "%~dp0server.js"

@@ -20,6 +20,35 @@ Everything runs locally — there is no cloud, no telemetry, no account.
 - **Bilingual UI** — Italian / English, switchable on the fly.
 - **Single-file frontend** — every panel lives in `widget.html` and can be embedded individually via `?panel=...`.
 
+## Install — for everyone
+
+### Step 1 — Run the installer (once)
+
+1. Download the ZIP from **[Releases](https://github.com/marcimastro98/XenonEdgeWidget/releases/latest)** and extract it anywhere.
+2. Open the extracted folder.
+3. Double-click **`INSTALL.bat`**.
+4. If Windows asks for permission to install Node.js, click **Yes**.
+
+The installer will automatically:
+- install **Node.js LTS** if it is not already on your PC;
+- register the widget server to **start with Windows** (no terminal, no tray icon — fully silent);
+- start the server right now in the background;
+- open `http://127.0.0.1:3030/` in your browser so you can confirm it works.
+
+### Step 2 — Add the widget in Corsair iCUE (once)
+
+1. Open **Corsair iCUE**.
+2. Go to your Xenon Edge dashboard and add an **iFrame** widget.
+3. Paste one of the URLs from the table below and save.
+
+That's the only time you ever need to touch anything.
+
+### Every time you start your PC after that
+
+> **Nothing.** The server starts silently in the background with Windows, and iCUE remembers your widget layout. The widget is live before you even open iCUE.
+
+To remove the startup entry, double-click **`UNINSTALL.bat`**.
+
 ## Requirements
 
 - Windows 10 or 11 (x64).
@@ -29,7 +58,7 @@ Everything runs locally — there is no cloud, no telemetry, no account.
 
 The bundled [`SoundVolumeView`](https://www.nirsoft.net/utils/sound_volume_view.html) by NirSoft handles audio device control and is shipped unmodified under its freeware license.
 
-## Quick start
+## Developer quick start
 
 ```powershell
 git clone https://github.com/marcimastro98/XenonEdgeWidget.git
@@ -39,7 +68,7 @@ npm start
 
 Then open <http://127.0.0.1:3030/> in any browser, or paste the same URL into a Corsair iCUE **iFrame** widget.
 
-You can also double-click `files/start.bat` for a no-terminal launch.
+You can also double-click `INSTALL.bat` for the full user-friendly setup, or `files/start.bat` if Node.js is already installed and you only want to start the server manually.
 
 > The server listens **only** on `127.0.0.1:3030` and rejects requests whose `Host` header is not loopback, to prevent DNS-rebinding / CSRF abuse from public websites.
 
@@ -92,6 +121,8 @@ In Corsair iCUE, drop the **iFrame** widget on your dashboard and paste the URL 
 
 ```
 XenonEdgeWidget/
+├── INSTALL.bat        ← One-click installer for normal users
+├── UNINSTALL.bat      ← Removes startup entry and stops the server
 ├── package.json
 ├── README.md
 ├── LICENSE
@@ -99,6 +130,9 @@ XenonEdgeWidget/
     ├── server.js          ← Node.js server (port 3030)
     ├── widget.html        ← Full UI (HTML + CSS + JS)
     ├── start.bat          ← Double-click launcher
+    ├── start-hidden.vbs   ← Hidden startup launcher
+    ├── install.ps1        ← Installer logic
+    ├── uninstall.ps1      ← Uninstaller logic
     ├── media.ps1          ← Now-playing via Windows SMTC
     ├── gpu.ps1            ← GPU usage / temperature (NVIDIA + perf counters)
     ├── network.ps1        ← Ping + adapter byte counters
