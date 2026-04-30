@@ -73,19 +73,26 @@ function Install-NodeIfNeeded {
   return $nodePath
 }
 
-function New-StartupShortcut {
-  Write-Step 'Creating automatic startup shortcut...'
+function Register-StartupTask {
+  Write-Step 'Registering startup task in Task Scheduler...'
+  # Remove old Startup folder shortcut if left over from a previous install
   $startup = [Environment]::GetFolderPath([Environment+SpecialFolder]::Startup)
-  $shortcutPath = Join-Path $startup "$appName.lnk"
-  $shell = New-Object -ComObject WScript.Shell
-  $shortcut = $shell.CreateShortcut($shortcutPath)
-  $shortcut.TargetPath = Join-Path $env:WINDIR 'System32\wscript.exe'
-  $shortcut.Arguments = '"' + $runner + '"'
-  $shortcut.WorkingDirectory = $filesDir
-  $shortcut.Description = 'Start Xenon Edge Widget local server'
-  $shortcut.IconLocation = Join-Path $env:WINDIR 'System32\shell32.dll,13'
-  $shortcut.Save()
-  return $shortcutPath
+  $oldLnk = Join-Path $startup "$appName.lnk"
+  if (Test-Path $oldLnk) { Remove-Item $oldLnk -Force }
+
+  $action   = New-ScheduledTaskAction -Execute (Join-Path $env:WINDIR 'System32\wscript.exe') -Argument "`"$runner`"" -WorkingDirectory $filesDir
+  $trigger  = New-ScheduledTaskTrigger -AtLogon -User $env:USERNAME
+  $settings = New-ScheduledTaskSettingsSet `
+    -ExecutionTimeLimit ([TimeSpan]::Zero) `
+    -RestartCount 3 `
+    -RestartInterval (New-TimeSpan -Minutes 1) `
+    -StartWhenAvailable
+  Register-ScheduledTask `
+    -TaskName $appName `
+    -Action $action `
+    -Trigger $trigger `
+    -Settings $settings `
+    -Force | Out-Null
 }
 
 function Test-WidgetServer {
@@ -120,7 +127,7 @@ Write-Host 'This installer will install Node.js if needed, enable startup with W
 Write-Host ''
 
 Install-NodeIfNeeded | Out-Null
-New-StartupShortcut | Out-Null
+Register-StartupTask
 Start-WidgetServer
 
 Write-Step 'Opening the dashboard...'

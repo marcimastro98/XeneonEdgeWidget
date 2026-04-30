@@ -3,14 +3,22 @@ $ErrorActionPreference = 'SilentlyContinue'
 $appName = 'Xenon Edge Widget'
 $root = Split-Path -Parent $PSScriptRoot
 $serverPath = Join-Path (Join-Path $root 'files') 'server.js'
+
+# Remove Task Scheduler task (new installs)
+$task = Get-ScheduledTask -TaskName $appName -ErrorAction SilentlyContinue
+if ($task) {
+  Unregister-ScheduledTask -TaskName $appName -Confirm:$false
+  Write-Host "Removed startup task: $appName" -ForegroundColor Green
+} else {
+  Write-Host 'No startup task found.' -ForegroundColor Yellow
+}
+
+# Remove old Startup folder shortcut (legacy installs)
 $startup = [Environment]::GetFolderPath([Environment+SpecialFolder]::Startup)
 $shortcutPath = Join-Path $startup "$appName.lnk"
-
 if (Test-Path $shortcutPath) {
   Remove-Item $shortcutPath -Force
-  Write-Host "Removed startup shortcut: $shortcutPath" -ForegroundColor Green
-} else {
-  Write-Host 'No startup shortcut found.' -ForegroundColor Yellow
+  Write-Host "Removed legacy startup shortcut." -ForegroundColor Green
 }
 
 $resolvedServerPath = (Resolve-Path $serverPath).Path
