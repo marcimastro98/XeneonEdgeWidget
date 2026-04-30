@@ -1,0 +1,811 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mic Widget</title>
+<style>
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: #0a0a0a;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100vh;
+    width: 100vw;
+    font-family: 'Segoe UI', 'Inter', system-ui, sans-serif;
+    user-select: none;
+    overflow: hidden;
+    overflow-y: auto;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* ── STATUS LABEL ─────────────────────────── */
+  .status-label {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    margin-bottom: 36px;
+    transition: color 0.25s ease;
+  }
+  .status-label.active { color: #1db954; }
+  .status-label.muted  { color: #e53935; }
+
+  /* ── MIC BUTTON WRAPPER ───────────────────── */
+  .btn-wrap {
+    position: relative;
+    width: 140px;
+    height: 140px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 48px;
+  }
+
+  /* outer pulsing ring */
+  .ring {
+    position: absolute;
+    inset: -16px;
+    border-radius: 50%;
+    border: 2px solid #1db954;
+    opacity: 0;
+    pointer-events: none;
+    transition: border-color 0.25s ease, opacity 0.25s ease;
+  }
+
+  .ring.active {
+    opacity: 1;
+    animation: pulse-ring 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  }
+
+  .ring.muted {
+    border-color: #e53935;
+    opacity: 0.35;
+    animation: none;
+  }
+
+  /* second outer ring for depth */
+  .ring2 {
+    position: absolute;
+    inset: -30px;
+    border-radius: 50%;
+    border: 1px solid #1db954;
+    opacity: 0;
+    pointer-events: none;
+    transition: border-color 0.25s ease, opacity 0.25s ease;
+  }
+
+  .ring2.active {
+    opacity: 0.3;
+    animation: pulse-ring 2s cubic-bezier(0.4, 0, 0.6, 1) infinite 0.4s;
+  }
+
+  .ring2.muted {
+    border-color: #e53935;
+    opacity: 0.12;
+    animation: none;
+  }
+
+  @keyframes pulse-ring {
+    0%   { transform: scale(1);    opacity: 0.55; }
+    60%  { transform: scale(1.08); opacity: 0.15; }
+    100% { transform: scale(1);    opacity: 0.55; }
+  }
+
+  /* glow behind button */
+  .glow {
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    transition: box-shadow 0.3s ease;
+  }
+  .glow.active { box-shadow: 0 0 60px 10px rgba(29,185,84,0.22); }
+  .glow.muted  { box-shadow: 0 0 50px 8px  rgba(229,57,53,0.20); }
+
+  /* ── MIC BUTTON ───────────────────────────── */
+  .mic-btn {
+    position: relative;
+    width: 140px;
+    height: 140px;
+    border-radius: 50%;
+    border: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+    transition: background 0.25s ease, box-shadow 0.25s ease, transform 0.12s ease;
+    z-index: 1;
+  }
+
+  .mic-btn:active { transform: scale(0.91); }
+
+  .mic-btn.active {
+    background: radial-gradient(circle at 38% 32%, #26d760, #1db954 55%, #15873b);
+    box-shadow:
+      0 8px 30px rgba(29,185,84,0.45),
+      0 2px 8px rgba(0,0,0,0.6),
+      inset 0 1px 0 rgba(255,255,255,0.12);
+  }
+
+  .mic-btn.muted {
+    background: radial-gradient(circle at 38% 32%, #f05252, #e53935 55%, #a02020);
+    box-shadow:
+      0 8px 30px rgba(229,57,53,0.45),
+      0 2px 8px rgba(0,0,0,0.6),
+      inset 0 1px 0 rgba(255,255,255,0.10);
+  }
+
+  .mic-btn svg {
+    width: 56px;
+    height: 56px;
+    fill: rgba(255,255,255,0.95);
+    filter: drop-shadow(0 1px 3px rgba(0,0,0,0.4));
+    transition: opacity 0.2s ease;
+  }
+
+  /* ── HINT TEXT ────────────────────────────── */
+  .hint {
+    font-size: 11px;
+    color: #2a2a2a;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    font-weight: 600;
+    margin-bottom: 24px;
+    transition: color 0.25s ease;
+  }
+
+  /* ── VOLUME SECTION ───────────────────────── */
+  .volume-wrap {
+    width: min(320px, 82vw);
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .vol-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .vol-title {
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 2.5px;
+    text-transform: uppercase;
+    color: #2a2a2a;
+  }
+
+  .vol-value {
+    font-size: 11px;
+    font-weight: 700;
+    color: #3a3a3a;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.5px;
+    transition: color 0.2s;
+  }
+
+  .vol-mute-btn {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: #161616;
+    border: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+    transition: background 0.15s, transform 0.1s;
+    flex-shrink: 0;
+  }
+
+  .vol-mute-btn:active { transform: scale(0.88); background: #1e1e1e; }
+
+  .vol-mute-btn svg {
+    width: 18px;
+    height: 18px;
+    fill: #555;
+    transition: fill 0.2s;
+  }
+
+  .vol-mute-btn.speaker-muted svg { fill: #e53935; }
+
+  .vol-slider.speaker-muted {
+    opacity: 0.35;
+    pointer-events: none;
+  }
+
+  /* custom range slider */
+  .vol-slider {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 100%;
+    height: 10px;
+    border-radius: 5px;
+    background: #161616;
+    outline: none;
+    cursor: pointer;
+    touch-action: manipulation;
+    position: relative;
+    border: none;
+  }
+
+  .vol-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    background: #e8e8e8;
+    box-shadow: 0 0 0 3px #0a0a0a, 0 2px 10px rgba(0,0,0,0.6);
+    cursor: pointer;
+    transition: transform 0.12s, box-shadow 0.12s;
+  }
+
+  .vol-slider:active::-webkit-slider-thumb {
+    transform: scale(1.2);
+    box-shadow: 0 0 0 3px #0a0a0a, 0 0 18px rgba(255,255,255,0.15);
+  }
+
+  .vol-slider::-moz-range-thumb {
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    background: #e8e8e8;
+    border: 3px solid #0a0a0a;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.6);
+    cursor: pointer;
+  }
+
+  /* ── ERROR INDICATOR ──────────────────────── */
+  .err-dot {
+    position: fixed;
+    bottom: 12px;
+    right: 14px;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    pointer-events: none;
+  }
+
+  .err-dot.visible { opacity: 1; }
+
+  .err-dot-circle {
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: #e53935;
+  }
+
+  .err-dot-text {
+    font-size: 9px;
+    color: #444;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    font-weight: 600;
+  }
+
+  /* ── DEVICE SECTION ───────────────────────── */
+  .device-section {
+    width: min(320px, 82vw);
+    margin-top: 28px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .device-row {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    background: #111;
+    border-radius: 12px;
+    padding: 14px 18px;
+    cursor: pointer;
+    transition: background 0.18s;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+    min-height: 58px;
+  }
+
+  .device-row:active { background: #1c1c1c; }
+
+  .device-icon {
+    font-size: 22px;
+    flex-shrink: 0;
+    opacity: 0.6;
+    line-height: 1;
+  }
+
+  .device-info {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .device-label {
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 2.5px;
+    text-transform: uppercase;
+    color: #333;
+    margin-bottom: 5px;
+  }
+
+  .device-name {
+    font-size: 13px;
+    font-weight: 600;
+    color: #888;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    letter-spacing: 0.2px;
+    transition: color 0.2s;
+  }
+
+  .device-row:active .device-name { color: #aaa; }
+
+  .device-chevron {
+    font-size: 16px;
+    color: #333;
+    flex-shrink: 0;
+  }
+
+  /* ── PICKER OVERLAY ───────────────────────── */
+  .picker-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 100;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.22s ease;
+  }
+
+  .picker-overlay.open {
+    opacity: 1;
+    pointer-events: all;
+  }
+
+  .picker-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(0,0,0,0.72);
+  }
+
+  .picker-panel {
+    position: relative;
+    background: #141414;
+    border-radius: 18px 18px 0 0;
+    padding: 20px 20px 32px;
+    transform: translateY(100%);
+    transition: transform 0.28s cubic-bezier(0.32, 0.72, 0, 1);
+    max-height: 70vh;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .picker-overlay.open .picker-panel {
+    transform: translateY(0);
+  }
+
+  .picker-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 18px;
+  }
+
+  .picker-title {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 2.5px;
+    text-transform: uppercase;
+    color: #3a3a3a;
+  }
+
+  .picker-close {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: #222;
+    border: none;
+    color: #555;
+    font-size: 14px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    -webkit-tap-highlight-color: transparent;
+    transition: background 0.15s;
+  }
+
+  .picker-close:active { background: #2a2a2a; }
+
+  .picker-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 4px;
+    border-bottom: 1px solid #1c1c1c;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+    transition: opacity 0.15s;
+  }
+
+  .picker-item:last-child { border-bottom: none; }
+  .picker-item:active { opacity: 0.65; }
+
+  .picker-item-text {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .picker-item-name {
+    font-size: 12px;
+    font-weight: 600;
+    color: #888;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .picker-item-label {
+    font-size: 9px;
+    color: #333;
+    margin-top: 2px;
+    letter-spacing: 0.5px;
+  }
+
+  .picker-check {
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    border: 2px solid #2a2a2a;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: border-color 0.2s, background 0.2s;
+  }
+
+  .picker-check.checked {
+    border-color: #1db954;
+    background: #1db954;
+  }
+
+  .picker-check.checked::after {
+    content: '';
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #fff;
+  }
+</style>
+</head>
+<body>
+
+<span class="status-label active" id="status-label">Microfono Attivo</span>
+
+<div class="btn-wrap">
+  <div class="ring active"  id="ring"></div>
+  <div class="ring2 active" id="ring2"></div>
+  <div class="glow active"  id="glow"></div>
+
+  <button class="mic-btn active" id="mic-btn"
+    ontouchend="handleTap(event)" onclick="handleTap(event)">
+
+    <!-- Icon: microphone ON -->
+    <svg id="svg-on" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+      <path d="M12 14a3 3 0 0 0 3-3V5a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3zm-1-9a1 1 0 0 1 2 0v6a1 1 0 0 1-2 0V5zm6 6c0 2.76-2.24 5-5 5s-5-2.24-5-5H5a7 7 0 0 0 6 6.92V21h2v-3.08A7 7 0 0 0 19 11h-2z"/>
+    </svg>
+
+    <!-- Icon: microphone OFF (muted) -->
+    <svg id="svg-off" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" style="display:none">
+      <path d="M19 11h-1.7c0 .74-.16 1.43-.43 2.05l1.23 1.23c.56-.98.9-2.09.9-3.28zm-4.02.17c0-.06.02-.11.02-.17V5c0-1.66-1.34-3-3-3S9 3.34 9 5v.18l5.98 5.99zM4.27 3 3 4.27l6.01 6.01V11c0 1.66 1.34 3 3 3 .23 0 .44-.03.65-.08l1.66 1.66c-.71.33-1.5.52-2.31.52C9.24 16.1 7 13.86 7 11H5a7 7 0 0 0 6 6.92V21h2v-3.08c.57-.08 1.12-.23 1.64-.45L19.73 21 21 19.73 4.27 3z"/>
+    </svg>
+
+  </button>
+</div>
+
+<span class="hint" id="hint">Tocca per mutare</span>
+
+<div class="volume-wrap">
+  <div class="vol-header">
+    <button class="vol-mute-btn" id="vol-mute-btn" onclick="toggleSpeakerMute()" title="Muta altoparlante">
+      <!-- speaker icon -->
+      <svg id="spk-icon-on" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+        <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3A4.5 4.5 0 0 0 14 7.97v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77 0-4.28-2.99-7.86-7-8.77z"/>
+      </svg>
+      <!-- muted icon -->
+      <svg id="spk-icon-off" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" style="display:none">
+        <path d="M16.5 12A4.5 4.5 0 0 0 14 7.97v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3 3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06a8.99 8.99 0 0 0 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4 9.91 6.09 12 8.18V4z"/>
+      </svg>
+    </button>
+    <span class="vol-title">Volume</span>
+    <span class="vol-value" id="vol-val">75%</span>
+  </div>
+  <input class="vol-slider" id="vol-slider" type="range"
+    min="0" max="100" value="75"
+    oninput="onSliderInput(this.value)"
+    ontouchstart="onSliderInput(this.value)">
+</div>
+
+<!-- ── DEVICE SECTION ───────────────────────── -->
+<div class="device-section">
+  <div class="device-row" id="spk-row" onclick="openPicker('speaker')">
+    <span class="device-icon">🔊</span>
+    <div class="device-info">
+      <div class="device-label">Altoparlante</div>
+      <div class="device-name" id="spk-name">—</div>
+    </div>
+    <span class="device-chevron">›</span>
+  </div>
+  <div class="device-row" id="mic-row" onclick="openPicker('mic')">
+    <span class="device-icon">🎙️</span>
+    <div class="device-info">
+      <div class="device-label">Microfono</div>
+      <div class="device-name" id="mic-name">—</div>
+    </div>
+    <span class="device-chevron">›</span>
+  </div>
+</div>
+
+<!-- ── PICKER OVERLAY ───────────────────────── -->
+<div class="picker-overlay" id="picker-overlay">
+  <div class="picker-backdrop" onclick="closePicker()"></div>
+  <div class="picker-panel">
+    <div class="picker-header">
+      <span class="picker-title" id="picker-title">Seleziona dispositivo</span>
+      <button class="picker-close" onclick="closePicker()">✕</button>
+    </div>
+    <div id="picker-list"></div>
+  </div>
+</div>
+
+<div class="err-dot" id="err-dot">
+  <div class="err-dot-circle"></div>
+  <span class="err-dot-text">Offline</span>
+</div>
+
+<script>
+  const SERVER = 'http://127.0.0.1:3030';
+  let muted = false;
+  let busy  = false;
+  let volDebounce = null;
+  let audioData = null;
+  let pickerType = null; // 'speaker' | 'mic'
+  let speakerMuted = false;
+
+  const micBtn    = document.getElementById('mic-btn');
+  const ring      = document.getElementById('ring');
+  const ring2     = document.getElementById('ring2');
+  const glow      = document.getElementById('glow');
+  const label     = document.getElementById('status-label');
+  const hint      = document.getElementById('hint');
+  const svgOn     = document.getElementById('svg-on');
+  const svgOff    = document.getElementById('svg-off');
+  const errDot    = document.getElementById('err-dot');
+  const volSlider = document.getElementById('vol-slider');
+  const volVal    = document.getElementById('vol-val');
+  const spkName      = document.getElementById('spk-name');
+  const volMuteBtn   = document.getElementById('vol-mute-btn');
+  const spkIconOn    = document.getElementById('spk-icon-on');
+  const spkIconOff   = document.getElementById('spk-icon-off');
+  const micName   = document.getElementById('mic-name');
+  const pickerOverlay = document.getElementById('picker-overlay');
+  const pickerTitle   = document.getElementById('picker-title');
+  const pickerList    = document.getElementById('picker-list');
+
+  // ── CLICK SOUND ──────────────────────────
+  const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+  function playClick(toMuted) {
+    const osc  = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    const now = audioCtx.currentTime;
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(toMuted ? 480 : 620, now);
+    osc.frequency.exponentialRampToValueAtTime(toMuted ? 220 : 380, now + 0.08);
+    gain.gain.setValueAtTime(0.18, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.12);
+    osc.start(now);
+    osc.stop(now + 0.13);
+  }
+
+  // ── SLIDER FILL ──────────────────────────
+  function refreshSlider(v) {
+    const pct = v + '%';
+    volSlider.style.background =
+      `linear-gradient(to right, #3a3a3a 0%, #3a3a3a ${pct}, #161616 ${pct}, #161616 100%)`;
+  }
+
+  refreshSlider(75);
+
+  // Called on slider drag — updates UI immediately, debounces server call
+  function onSliderInput(v) {
+    v = parseInt(v);
+    volVal.textContent = v + '%';
+    refreshSlider(v);
+    clearTimeout(volDebounce);
+    volDebounce = setTimeout(() => sendVolume(v), 120);
+  }
+
+  // ── SPEAKER MUTE ─────────────────────────
+  async function toggleSpeakerMute() {
+    const previous = speakerMuted;
+    speakerMuted = !speakerMuted;
+    applySpeakerMute(speakerMuted);
+    try {
+      const res = await fetch(SERVER + '/speaker/mute', { method: 'POST' });
+      if (!res.ok) throw new Error('Speaker mute failed');
+      setOnline();
+      setTimeout(fetchAudio, 350);
+    } catch {
+      applySpeakerMute(previous);
+      setOffline();
+    }
+  }
+
+  function applySpeakerMute(m) {
+    speakerMuted = m;
+    volMuteBtn.classList.toggle('speaker-muted', m);
+    volSlider.classList.toggle('speaker-muted', m);
+    spkIconOn.style.display  = m ? 'none' : '';
+    spkIconOff.style.display = m ? ''     : 'none';
+  }
+
+  async function sendVolume(level) {
+    try {
+      await fetch(SERVER + '/volume/set', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ level }),
+      });
+      setOnline();
+    } catch { setOffline(); }
+  }
+
+  // ── APPLY MIC UI ─────────────────────────
+  function applyUI(isMuted) {
+    muted = isMuted;
+    const s = isMuted ? 'muted' : 'active';
+    micBtn.className    = `mic-btn ${s}`;
+    ring.className      = `ring ${s}`;
+    ring2.className     = `ring2 ${s}`;
+    glow.className      = `glow ${s}`;
+    label.className     = `status-label ${s}`;
+    label.textContent   = isMuted ? 'Microfono Mutato' : 'Microfono Attivo';
+    hint.textContent    = isMuted ? 'Tocca per attivare' : 'Tocca per mutare';
+    svgOn.style.display  = isMuted ? 'none' : '';
+    svgOff.style.display = isMuted ? ''     : 'none';
+  }
+
+  // ── APPLY AUDIO DATA TO UI ───────────────
+  function applyAudio(data) {
+    audioData = data;
+    if (data.speaker) {
+      spkName.textContent = data.speaker.name || data.speaker.label;
+      const vol = data.speaker.volume;
+      volSlider.value = vol;
+      volVal.textContent = vol + '%';
+      refreshSlider(vol);
+      applySpeakerMute(data.speaker.muted);
+    }
+    if (data.mic) {
+      micName.textContent = data.mic.name || data.mic.label;
+    }
+  }
+
+  // ── TOGGLE ────────────────────────────────
+  async function handleTap(e) {
+    e.preventDefault();
+    if (busy) return;
+    busy = true;
+    playClick(!muted);
+    applyUI(!muted);
+    try {
+      const res  = await fetch(SERVER + '/toggle', { method: 'POST' });
+      const data = await res.json();
+      applyUI(data.muted);
+      setOnline();
+    } catch {
+      applyUI(!muted);
+      setOffline();
+    }
+    busy = false;
+  }
+
+  // ── DEVICE PICKER ─────────────────────────
+  function openPicker(type) {
+    if (!audioData) return;
+    pickerType = type;
+    const isSpeaker = type === 'speaker';
+    pickerTitle.textContent = isSpeaker ? 'Seleziona Altoparlante' : 'Seleziona Microfono';
+    const devices   = isSpeaker ? audioData.speakers : audioData.mics;
+    const currentId = isSpeaker ? (audioData.speaker && audioData.speaker.id) : (audioData.mic && audioData.mic.id);
+
+    pickerList.innerHTML = '';
+    devices.forEach(dev => {
+      const isActive = dev.id === currentId;
+      const item = document.createElement('div');
+      item.className = 'picker-item';
+      item.innerHTML = `
+        <div class="picker-item-text">
+          <div class="picker-item-name">${dev.name || dev.label}</div>
+          <div class="picker-item-label">${dev.label}</div>
+        </div>
+        <div class="picker-check${isActive ? ' checked' : ''}"></div>`;
+      item.addEventListener('click', () => selectDevice(type, dev.id));
+      pickerList.appendChild(item);
+    });
+
+    pickerOverlay.classList.add('open');
+  }
+
+  function closePicker() {
+    pickerOverlay.classList.remove('open');
+  }
+
+  async function selectDevice(type, id) {
+    closePicker();
+    const endpoint = type === 'speaker' ? '/speaker/set' : '/mic/set';
+    try {
+      await fetch(SERVER + endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id }),
+      });
+      setOnline();
+      // Refresh audio info after a brief delay for Windows to settle
+      setTimeout(fetchAudio, 600);
+    } catch { setOffline(); }
+  }
+
+  // ── POLL ──────────────────────────────────
+  async function poll() {
+    try {
+      const res  = await fetch(SERVER + '/status');
+      const data = await res.json();
+      applyUI(data.muted);
+      setOnline();
+    } catch {
+      setOffline();
+    }
+  }
+
+  async function fetchAudio() {
+    try {
+      const res  = await fetch(SERVER + '/audio');
+      const data = await res.json();
+      applyAudio(data);
+      setOnline();
+    } catch {
+      setOffline();
+    }
+  }
+
+  function setOnline()  { errDot.classList.remove('visible'); }
+  function setOffline() { errDot.classList.add('visible');    }
+
+  // ── INIT ──────────────────────────────────
+  poll();
+  fetchAudio();
+  setInterval(poll,       3000);
+  setInterval(fetchAudio, 5000);
+</script>
+</body>
+</html>
