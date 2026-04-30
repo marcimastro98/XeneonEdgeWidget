@@ -157,6 +157,17 @@ XenonEdgeWidget/
 - **No CPU temperature** — install LibreHardwareMonitor and keep it running in the background.
 - **Mic mute does nothing on first launch** — wait one or two seconds: the device cache is populated right after startup.
 
+## Support
+
+Something not working? Open an issue on GitHub and describe what you see:
+
+**[github.com/marcimastro98/XenonEdgeWidget/issues](https://github.com/marcimastro98/XenonEdgeWidget/issues)**
+
+Please include:
+- your Windows version (Win 10 / Win 11);
+- what you did and what happened instead;
+- any error text visible in the window that appeared when you ran `INSTALL.bat`.
+
 ## License
 
 [MIT](LICENSE). Includes [SoundVolumeView](https://www.nirsoft.net/utils/sound_volume_view.html) © Nir Sofer (freeware, redistributed unmodified).
