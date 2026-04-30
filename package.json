@@ -1,0 +1,32 @@
+{
+  "name": "xenon-edge-widget",
+  "version": "1.0.0",
+  "description": "A self-contained local web widget for Corsair iCUE / Xeneon Edge dashboards: media controls, audio devices, microphone mute, calendar, notes and live system stats — all on Windows.",
+  "private": true,
+  "main": "files/server.js",
+  "scripts": {
+    "start": "node files/server.js"
+  },
+  "engines": {
+    "node": ">=18.15.0"
+  },
+  "os": [
+    "win32"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/marcimastro98/XenonEdgeWidget.git"
+  },
+  "keywords": [
+    "corsair",
+    "icue",
+    "xeneon-edge",
+    "widget",
+    "windows",
+    "dashboard",
+    "system-monitor",
+    "spotify",
+    "microphone"
+  ]
+}

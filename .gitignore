@@ -1,0 +1,28 @@
+# Node
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# OS
+Thumbs.db
+.DS_Store
+desktop.ini
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# SoundVolumeView runtime artifacts
+files/soundvolumeview-x64/out.csv
+files/soundvolumeview-x64/tmp.csv
+files/soundvolumeview-x64/*.cfg.bak
+
+# User data (created at runtime; tracked empty defaults are fine)
+# Do NOT ignore the default empty files in repo, only ignore local edits if needed
+# files/notes.txt
+# files/events.json
+
+# Logs
+*.log

@@ -623,8 +623,14 @@ function getAudioInfo() {
 
 function setMicMute(mute) {
   const action = mute ? '/Mute' : '/Unmute';
-  exec(`"${SVV}" ${action} "Microfono"`,       err => { if (err) console.error(err.message); });
-  exec(`"${SVV}" ${action} "Gruppo microfoni"`, err => { if (err) console.error(err.message); });
+  // Use the cached mic CLI ID (resolved from SoundVolumeView output) so the call works
+  // regardless of the Windows display language. Falls back silently if the cache is empty.
+  if (cachedMicId) {
+    execFile(SVV, [action, cachedMicId], err => { if (err) console.error(err.message); });
+  } else if (cachedSpeakerName) {
+    // Last-resort: try the generic 'DefaultCaptureDevice' selector understood by SVV
+    execFile(SVV, [action, 'DefaultCaptureDevice'], err => { if (err) console.error(err.message); });
+  }
 }
 
 function readBody(req) {
@@ -671,10 +677,34 @@ async function writeEvents(events) {
   return safe;
 }
 
+// Allow only loopback Host headers so a malicious public site cannot reach this
+// server via DNS-rebinding / CSRF and trigger /shortcut, /lock, /toggle, etc.
+const ALLOWED_HOSTS = new Set([
+  '127.0.0.1:3030', 'localhost:3030', '[::1]:3030',
+  '127.0.0.1', 'localhost', '[::1]',
+]);
+
+function isAllowedRequest(req) {
+  const host = (req.headers.host || '').toLowerCase();
+  if (!ALLOWED_HOSTS.has(host)) return false;
+  const origin = req.headers.origin;
+  if (origin) {
+    try {
+      const u = new URL(origin);
+      if (u.hostname !== '127.0.0.1' && u.hostname !== 'localhost' && u.hostname !== '[::1]') return false;
+    } catch { return false; }
+  }
+  return true;
+}
+
 const server = http.createServer(async (req, res) => {
-  res.setHeader('Access-Control-Allow-Origin',  '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  // Same-origin only: the widget HTML is served from this server, so callers are
+  // always same-origin. CORS headers intentionally omitted to avoid CSRF surface.
+  if (!isAllowedRequest(req)) {
+    res.writeHead(403, { 'Content-Type': 'text/plain' });
+    res.end('Forbidden');
+    return;
+  }
 
   if (req.method === 'OPTIONS') { res.writeHead(204); res.end(); return; }
 
@@ -793,7 +823,9 @@ const server = http.createServer(async (req, res) => {
   } else if (req.url === '/notes' && req.method === 'POST') {
     try {
       const { text } = JSON.parse(await readBody(req));
-      const safe = typeof text === 'string' ? text : '';
+      // Cap at 200 KB to prevent disk exhaustion via repeated saves.
+      const raw = typeof text === 'string' ? text : '';
+      const safe = raw.length > 200_000 ? raw.slice(0, 200_000) : raw;
       fs.promises.writeFile(NOTES_FILE, safe, 'utf8')
         .then(() => json({ ok: true, savedAt: Date.now() }))
         .catch(e => err500(e.message));
@@ -836,11 +868,14 @@ const server = http.createServer(async (req, res) => {
 
 server.listen(3030, '127.0.0.1', () => {
   console.log('Widget server running on http://127.0.0.1:3030');
-  setMicMute(false);
-  // Pre-populate device cache so mute/volume work immediately without waiting for /audio
-  getAudioInfo().then(d => {
+  // Pre-populate device cache so mute/volume work immediately without waiting for /audio.
+  // Sync the in-memory `isMuted` flag with the actual Windows mic state instead of
+  // forcing an unmute at startup (which would surprise users).
+  getAudioInfo().then(info => {
+    if (info && info.mic && typeof info.mic.muted === 'boolean') isMuted = info.mic.muted;
     console.log('Speaker cache:', cachedSpeakerId);
-    console.log('Mic cache:', cachedMicId);
+    console.log('Mic cache:   ', cachedMicId);
+    console.log('Mic muted:   ', isMuted);
   }).catch(e => console.error('Audio init failed:', e.message));
 });
 
