@@ -1,10 +1,9 @@
 ---
 name: Bug report
 about: Something isn't working as expected
-title: "[BUG]"
+title: '[BUG] '
 labels: bug
 assignees: marcimastro98
-
 ---
 
 **Describe the bug**
