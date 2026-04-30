@@ -4702,6 +4702,15 @@
       changed = changed || next.id !== fav.id || next.title !== fav.title || next.icon !== fav.icon;
       return next;
     });
+    // Deduplicate: keep only the first (most recent) favorite per app name.
+    const seenApps = new Set();
+    const deduped = appFavorites.filter(fav => {
+      const appName = (fav.app || '').trim().toLowerCase();
+      if (!appName || seenApps.has(appName)) { changed = true; return false; }
+      seenApps.add(appName);
+      return true;
+    });
+    appFavorites = deduped;
     if (changed) saveAppFavorites();
   }
 
@@ -4741,8 +4750,18 @@
     if (!key) return;
     const existing = appFavorites.findIndex(fav => fav.key === key);
     if (existing >= 0) {
+      // Already a favorite — remove it (toggle off)
       appFavorites.splice(existing, 1);
     } else {
+      // Remove any stale favorite for the same app (same process name, different title/key)
+      // so one app always occupies exactly one slot.
+      const appName = (win.app || '').trim().toLowerCase();
+      if (appName) {
+        const staleIdx = appFavorites.findIndex(fav =>
+          (fav.app || '').trim().toLowerCase() === appName
+        );
+        if (staleIdx >= 0) appFavorites.splice(staleIdx, 1);
+      }
       appFavorites.unshift({
         key,
         id: String(win.id || ''),

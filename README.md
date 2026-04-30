@@ -159,14 +159,15 @@ XenonEdgeWidget/
 
 ## Support
 
-Something not working? Open an issue on GitHub and describe what you see:
-
-**[github.com/marcimastro98/XenonEdgeWidget/issues](https://github.com/marcimastro98/XenonEdgeWidget/issues)**
-
-Please include:
+**Found a bug?** Open a [Bug Report](https://github.com/marcimastro98/XenonEdgeWidget/issues/new?template=bug_report.md) and include:
 - your Windows version (Win 10 / Win 11);
 - what you did and what happened instead;
 - any error text visible in the window that appeared when you ran `INSTALL.bat`.
+
+**Have an idea or suggestion?** Open a [Feature Request](https://github.com/marcimastro98/XenonEdgeWidget/issues/new?template=feature_request.md) — all feedback is welcome.
+
+**If this widget saved you some time and you want to say thanks:**
+[☕ Buy me a coffee via PayPal](https://www.paypal.me/MarcelloMastroeni) — no pressure, always appreciated.
 
 ## License
 
