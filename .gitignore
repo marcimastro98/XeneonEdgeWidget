@@ -1,3 +1,7 @@
+# Copilot workspace instructions — local only, never commit
+.github/copilot-instructions.md
+.claude/
+
 # Node
 node_modules/
 npm-debug.log*
@@ -15,13 +19,16 @@ desktop.ini
 *.swp
 
 # SoundVolumeView runtime artifacts
-files/soundvolumeview-x64/out.csv
-files/soundvolumeview-x64/tmp.csv
-files/soundvolumeview-x64/*.cfg.bak
+server/soundvolumeview-x64/out.csv
+server/soundvolumeview-x64/tmp.csv
+server/soundvolumeview-x64/*.cfg.bak
 
 # User data — generated at runtime, never commit these
-files/notes.txt
-files/events.json
+server/notes.txt
+server/events.json
 
 # Logs
 *.log
+
+# iCUE packaging scratch directory
+.icue-package/

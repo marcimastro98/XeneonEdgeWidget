@@ -18,7 +18,7 @@ Everything runs locally — there is no cloud, no telemetry, no account.
 - **Calendar** — quick events with desktop reminders.
 - **Notes** — auto-saving scratchpad.
 - **Bilingual UI** — Italian / English, switchable on the fly.
-- **Single-file frontend** — every panel lives in `widget.html` and can be embedded individually via `?panel=...`.
+- **Single-file frontend** — every panel lives in `server/widget.html` and can be embedded individually via `?panel=...`.
 
 ## Install — for everyone
 
@@ -68,13 +68,13 @@ npm start
 
 Then open <http://127.0.0.1:3030/> in any browser, or paste the same URL into a Corsair iCUE **iFrame** widget.
 
-You can also double-click `INSTALL.bat` for the full user-friendly setup, or `files/start.bat` if Node.js is already installed and you only want to start the server manually.
+You can also double-click `INSTALL.bat` for the full user-friendly setup, or `server/start.bat` if Node.js is already installed and you only want to start the server manually.
 
 > The server listens **only** on `127.0.0.1:3030` and rejects requests whose `Host` header is not loopback, to prevent DNS-rebinding / CSRF abuse from public websites.
 
 ## Embedding individual panels
 
-The same `widget.html` serves every panel; pick one with `?panel=`:
+The same `server/widget.html` serves every panel; pick one with `?panel=`:
 
 | Panel | URL |
 |---|---|
@@ -121,26 +121,37 @@ In Corsair iCUE, drop the **iFrame** widget on your dashboard and paste the URL 
 
 ```
 XenonEdgeWidget/
-├── INSTALL.bat        ← One-click installer for normal users
-├── UNINSTALL.bat      ← Removes startup entry and stops the server
+├── INSTALL.bat            ← One-click installer for normal users
+├── UNINSTALL.bat          ← Removes startup entry and stops the server
 ├── package.json
 ├── README.md
 ├── LICENSE
-└── files/
-    ├── server.js          ← Node.js server (port 3030)
-    ├── widget.html        ← Full UI (HTML + CSS + JS)
-    ├── start.bat          ← Double-click launcher
-    ├── start-hidden.vbs   ← Hidden startup launcher
-    ├── install.ps1        ← Installer logic
-    ├── uninstall.ps1      ← Uninstaller logic
-    ├── media.ps1          ← Now-playing via Windows SMTC
-    ├── gpu.ps1            ← GPU usage / temperature (NVIDIA + perf counters)
-    ├── network.ps1        ← Ping + adapter byte counters
-    ├── windows.ps1        ← Window enumeration / focus
-    ├── notes.txt          ← Notes (auto-created)
-    ├── events.json        ← Calendar (auto-created)
-    └── soundvolumeview-x64/
-        └── SoundVolumeView.exe   ← Audio device control (NirSoft, freeware)
+├── server/                ← Node.js local server (port 3030)
+│   ├── server.js          ← HTTP API server
+│   ├── widget.html        ← Full UI (HTML + CSS + JS)
+│   ├── start.bat          ← Double-click launcher
+│   ├── start-hidden.vbs   ← Hidden startup launcher
+│   ├── install.ps1        ← Installer logic
+│   ├── uninstall.ps1      ← Uninstaller logic
+│   ├── media.ps1          ← Now-playing via Windows SMTC
+│   ├── gpu.ps1            ← GPU usage / temperature (NVIDIA + perf counters)
+│   ├── network.ps1        ← Ping + adapter byte counters
+│   ├── windows.ps1        ← Window enumeration / focus
+│   ├── notes.txt          ← Notes (auto-created, gitignored)
+│   ├── events.json        ← Calendar (auto-created, gitignored)
+│   └── soundvolumeview-x64/
+│       └── SoundVolumeView.exe   ← Audio device control (NirSoft, freeware)
+└── widget/                ← Native iCUE widget (Elgato Marketplace)
+    ├── manifest.json
+    ├── index.html
+    ├── translation.json
+    ├── styles/
+    │   └── main.css
+    ├── modules/
+    ├── components/
+    ├── common/plugins/
+    └── resources/
+        └── icon.svg
 ```
 
 ## Security notes
@@ -153,7 +164,7 @@ XenonEdgeWidget/
 ## Troubleshooting
 
 - **`node` not recognised** — install Node.js 18+ and reopen your terminal.
-- **Port 3030 already in use** — close any other widget instance, or change the port in `files/server.js`.
+- **Port 3030 already in use** — close any other widget instance, or change the port in `server/server.js`.
 - **No CPU temperature** — install LibreHardwareMonitor and keep it running in the background.
 - **Mic mute does nothing on first launch** — wait one or two seconds: the device cache is populated right after startup.
 

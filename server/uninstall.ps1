@@ -2,7 +2,7 @@ $ErrorActionPreference = 'SilentlyContinue'
 
 $appName = 'Xenon Edge Widget'
 $root = Split-Path -Parent $PSScriptRoot
-$serverPath = Join-Path (Join-Path $root 'files') 'server.js'
+$serverPath = Join-Path (Join-Path $root 'server') 'server.js'
 
 # Remove Task Scheduler task (new installs)
 $task = Get-ScheduledTask -TaskName $appName -ErrorAction SilentlyContinue

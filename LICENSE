@@ -24,6 +24,6 @@ SOFTWARE.
 
 Third-party software included in this repository:
 
-- SoundVolumeView (files/soundvolumeview-x64/) © Nir Sofer — freeware, distributed
+- SoundVolumeView (server/soundvolumeview-x64/) © Nir Sofer — freeware, distributed
   unmodified under the original NirSoft license. See
-  files/soundvolumeview-x64/readme.txt for full terms.
+  server/soundvolumeview-x64/readme.txt for full terms.

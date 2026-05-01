@@ -2,7 +2,7 @@ $ErrorActionPreference = 'Stop'
 
 $appName = 'Xenon Edge Widget'
 $root = Split-Path -Parent $PSScriptRoot
-$filesDir = Join-Path $root 'files'
+$filesDir = Join-Path $root 'server'
 $runner = Join-Path $filesDir 'start-hidden.vbs'
 $url = 'http://127.0.0.1:3030/'
 
