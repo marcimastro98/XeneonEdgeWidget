@@ -714,7 +714,7 @@ const server = http.createServer(async (req, res) => {
   const reqPath = req.url.split('?')[0];
 
   if (reqPath === '/' && req.method === 'GET') {
-    const html = fs.readFileSync(path.join(__dirname, 'widget.html'), 'utf8');
+    const html = fs.readFileSync(path.join(__dirname, 'index.html'), 'utf8');
     res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
     res.end(html);
 
@@ -860,6 +860,22 @@ const server = http.createServer(async (req, res) => {
         if (e) err500(e.message); else json({ ok: true });
       });
     } catch (e) { err500(e.message); }
+
+  } else if (req.method === 'GET' && /^\/(styles|components|js)(\/|$)/.test(reqPath)) {
+    // Static asset handler for refactored CSS/JS files.
+    // Normalise to an absolute path and reject any traversal outside __dirname.
+    const rel = reqPath.replace(/^\//, '');
+    const abs = path.normalize(path.join(__dirname, rel));
+    if (!abs.startsWith(path.join(__dirname, path.sep)) && abs !== __dirname) {
+      res.writeHead(403); res.end('Forbidden'); return;
+    }
+    const ext = path.extname(abs).toLowerCase();
+    const mime = ext === '.css' ? 'text/css; charset=utf-8'
+               : ext === '.js'  ? 'text/javascript; charset=utf-8'
+               : 'application/octet-stream';
+    fs.promises.readFile(abs)
+      .then(data => { res.writeHead(200, { 'Content-Type': mime }); res.end(data); })
+      .catch(e => { if (e.code === 'ENOENT') { res.writeHead(404); res.end(); } else err500(e.message); });
 
   } else {
     res.writeHead(404); res.end();
