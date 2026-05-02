@@ -79,9 +79,10 @@
     // Sensor IDs
     Hub.state.sensorIds.cpuLoad  = g('cpuLoadSensor')  || '';
     Hub.state.sensorIds.cpuTemp  = g('cpuTempSensor')  || '';
-    Hub.state.sensorIds.gpuLoad  = g('gpuLoadSensor')  || '';
-    Hub.state.sensorIds.gpuTemp  = g('gpuTempSensor')  || '';
-    Hub.state.sensorIds.ramLoad  = g('ramLoadSensor')  || '';
+    Hub.state.sensorIds.gpuLoad    = g('gpuLoadSensor')    || '';
+    Hub.state.sensorIds.gpuTemp    = g('gpuTempSensor')    || '';
+    Hub.state.sensorIds.gpuMemLoad = g('gpuMemLoadSensor') || '';
+    Hub.state.sensorIds.ramLoad    = g('ramLoadSensor')    || '';
     Hub.state.sensorIds.diskTemp = g('diskTempSensor') || '';
     Hub.state.sensorIds.netUp    = g('netUploadSensor')   || '';
     Hub.state.sensorIds.netDown  = g('netDownloadSensor') || '';

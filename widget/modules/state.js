@@ -14,7 +14,7 @@
     // iCUE sensor IDs resolved from property comboboxes
     sensorIds: {
       cpuLoad: '', cpuTemp: '',
-      gpuLoad: '', gpuTemp: '',
+      gpuLoad: '', gpuTemp: '', gpuMemLoad: '',
       ramLoad: '', diskTemp: '',
       netUp:   '', netDown: ''
     },
@@ -22,7 +22,7 @@
     // Latest sensor values (raw strings from iCUE or server)
     sensors: {
       cpuLoad: null, cpuTemp: null,
-      gpuLoad: null, gpuTemp: null,
+      gpuLoad: null, gpuTemp: null, gpuMemLoad: null,
       ramLoad: null, diskTemp: null,
       netUp:   null, netDown: null
     },

@@ -677,18 +677,28 @@ async function writeEvents(events) {
   return safe;
 }
 
-// Allow only loopback Host headers so a malicious public site cannot reach this
-// server via DNS-rebinding / CSRF and trigger /shortcut, /lock, /toggle, etc.
+// Security: only accept connections from loopback addresses.
+// Double-checked at both the TCP socket level (remoteAddress) and the HTTP Host header
+// level, so DNS-rebinding / Host-spoofing attacks from non-loopback IPs are blocked.
+const LOOPBACK_IPS = new Set(['127.0.0.1', '::1', '::ffff:127.0.0.1']);
 const ALLOWED_HOSTS = new Set([
   '127.0.0.1:3030', 'localhost:3030', '[::1]:3030',
   '127.0.0.1', 'localhost', '[::1]',
 ]);
 
 function isAllowedRequest(req) {
+  // Layer 1: TCP source IP must be loopback (blocks LAN spoofing regardless of Host)
+  const remoteAddr = req.socket.remoteAddress || '';
+  if (!LOOPBACK_IPS.has(remoteAddr)) return false;
+
+  // Layer 2: Host header must be a loopback address (protects against DNS rebinding)
   const host = (req.headers.host || '').toLowerCase();
   if (!ALLOWED_HOSTS.has(host)) return false;
+
+  // Layer 3: If an Origin header is present, it must also be loopback or opaque.
+  // 'null' = opaque origin from Qt WebEngine (file:// or qrc:// page) — allowed.
   const origin = req.headers.origin;
-  if (origin) {
+  if (origin && origin !== 'null') {
     try {
       const u = new URL(origin);
       if (u.hostname !== '127.0.0.1' && u.hostname !== 'localhost' && u.hostname !== '[::1]') return false;
@@ -698,67 +708,94 @@ function isAllowedRequest(req) {
 }
 
 const server = http.createServer(async (req, res) => {
-  // Same-origin only: the widget HTML is served from this server, so callers are
-  // always same-origin. CORS headers intentionally omitted to avoid CSRF surface.
   if (!isAllowedRequest(req)) {
     res.writeHead(403, { 'Content-Type': 'text/plain' });
     res.end('Forbidden');
     return;
   }
 
+  // CORS headers required for the iCUE widget WebView (opaque origin, qrc:// or file://).
+  // Access-Control-Allow-Private-Network is required by Chrome 104+ (Private Network
+  // Access spec) when a non-secure context (file://) fetches a private-network address.
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader('Access-Control-Allow-Private-Network', 'true');
+
   if (req.method === 'OPTIONS') { res.writeHead(204); res.end(); return; }
 
-  const json   = data => { res.writeHead(200, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(data)); };
+  // JSONP support: if ?cb=<name> is present, wrap the response in a JS callback.
+  // Used by the iCUE widget where fetch() is blocked by Qt WebEngine's
+  // LocalContentCanAccessRemoteUrls policy; <script> tag injection bypasses it.
+  const urlObj  = new URL(req.url, 'http://localhost');
+  const jsonpCb = urlObj.searchParams.get('cb');
+  const json    = data => {
+    const body = JSON.stringify(data);
+    if (jsonpCb && /^[A-Za-z_$][\w$]*$/.test(jsonpCb)) {
+      res.writeHead(200, { 'Content-Type': 'text/javascript; charset=utf-8' });
+      res.end(jsonpCb + '(' + body + ');');
+    } else {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(body);
+    }
+  };
   const err500 = msg  => { res.writeHead(500); res.end(String(msg)); };
 
-  const reqPath = req.url.split('?')[0];
+  const reqPath = urlObj.pathname;
 
   if (reqPath === '/' && req.method === 'GET') {
     const html = fs.readFileSync(path.join(__dirname, 'index.html'), 'utf8');
     res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
     res.end(html);
 
-  } else if (req.url === '/toggle' && req.method === 'POST') {
+  } else if (reqPath === '/toggle' && (req.method === 'POST' || req.method === 'GET')) {
     isMuted = !isMuted;
     setMicMute(isMuted);
     json({ muted: isMuted });
 
-  } else if (req.url === '/status' && req.method === 'GET') {
+  } else if (reqPath === '/ping' && req.method === 'GET') {
+    // 1×1 transparent GIF — used by the iCUE widget to probe connectivity via
+    // Image() instead of fetch(), bypassing Qt WebEngine's LocalContentCanAccessRemoteUrls block.
+    const gif = Buffer.from('R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==', 'base64');
+    res.writeHead(200, { 'Content-Type': 'image/gif', 'Cache-Control': 'no-store' });
+    res.end(gif);
+
+  } else if (reqPath === '/status' && req.method === 'GET') {
     json({ muted: isMuted });
 
-  } else if (req.url === '/audio' && req.method === 'GET') {
+  } else if (reqPath === '/audio' && req.method === 'GET') {
     try   { json(await getAudioInfo()); }
     catch (e) { err500(e.message); }
 
-  } else if (req.url === '/system' && req.method === 'GET') {
+  } else if (reqPath === '/system' && req.method === 'GET') {
     try   { json(await getSystemInfo()); }
     catch (e) { err500(e.message); }
 
-  } else if (req.url === '/network' && req.method === 'GET') {
+  } else if (reqPath === '/network' && req.method === 'GET') {
     try   { json(await getNetworkInfo()); }
     catch (e) { err500(e.message); }
 
-  } else if (req.url === '/media' && req.method === 'GET') {
+  } else if (reqPath === '/media' && req.method === 'GET') {
     try   { json(await getMediaInfo()); }
     catch (e) { err500(e.message); }
 
-  } else if (req.url === '/media/playpause' && req.method === 'POST') {
+  } else if (reqPath === '/media/playpause' && (req.method === 'POST' || req.method === 'GET')) {
     try   { json(await mediaAction('playpause')); }
     catch (e) { err500(e.message); }
 
-  } else if (req.url === '/media/next' && req.method === 'POST') {
+  } else if (reqPath === '/media/next' && (req.method === 'POST' || req.method === 'GET')) {
     try   { json(await mediaAction('next')); }
     catch (e) { err500(e.message); }
 
-  } else if (req.url === '/media/previous' && req.method === 'POST') {
+  } else if (reqPath === '/media/previous' && (req.method === 'POST' || req.method === 'GET')) {
     try   { json(await mediaAction('previous')); }
     catch (e) { err500(e.message); }
 
-  } else if (req.url === '/windows' && req.method === 'GET') {
+  } else if (reqPath === '/windows' && req.method === 'GET') {
     try   { json(await runPowerShellScript(WINDOWS_SCRIPT, ['list'], 12000)); }
     catch (e) { err500(e.message); }
 
-  } else if (req.url === '/windows/focus' && req.method === 'POST') {
+  } else if (reqPath === '/windows/focus' && req.method === 'POST') {
     try {
       const { id } = JSON.parse(await readBody(req));
       if (!id || typeof id !== 'string' || !/^\d{1,24}$/.test(id)) {
@@ -767,9 +804,14 @@ const server = http.createServer(async (req, res) => {
       json(await runPowerShellScript(WINDOWS_SCRIPT, ['focus', id], 5000));
     } catch (e) { err500(e.message); }
 
-  } else if (req.url === '/volume/set' && req.method === 'POST') {
+  } else if (reqPath === '/volume/set' && (req.method === 'POST' || req.method === 'GET')) {
     try {
-      const { level } = JSON.parse(await readBody(req));
+      let level;
+      if (req.method === 'GET') {
+        level = parseInt(urlObj.searchParams.get('level'));
+      } else {
+        ({ level } = JSON.parse(await readBody(req)));
+      }
       const vol = Math.max(0, Math.min(100, parseInt(level)));
       if (!cachedSpeakerId) { err500('Cache not ready'); return; }
       execFile(SVV, ['/SetVolume', cachedSpeakerId, String(vol)], e => {
@@ -777,9 +819,14 @@ const server = http.createServer(async (req, res) => {
       });
     } catch (e) { err500(e.message); }
 
-  } else if (req.url === '/mic/volume' && req.method === 'POST') {
+  } else if (reqPath === '/mic/volume' && (req.method === 'POST' || req.method === 'GET')) {
     try {
-      const { level } = JSON.parse(await readBody(req));
+      let level;
+      if (req.method === 'GET') {
+        level = parseInt(urlObj.searchParams.get('level'));
+      } else {
+        ({ level } = JSON.parse(await readBody(req)));
+      }
       const vol = Math.max(0, Math.min(100, parseInt(level)));
       if (!cachedMicId) { err500('Cache not ready'); return; }
       execFile(SVV, ['/SetVolume', cachedMicId, String(vol)], e => {
@@ -787,13 +834,13 @@ const server = http.createServer(async (req, res) => {
       });
     } catch (e) { err500(e.message); }
 
-  } else if (req.url === '/speaker/mute' && req.method === 'POST') {
+  } else if (reqPath === '/speaker/mute' && (req.method === 'POST' || req.method === 'GET')) {
     if (!cachedSpeakerId) { err500('Cache not ready'); return; }
     execFile(SVV, ['/Switch', cachedSpeakerId], e => {
       if (e) err500(e.message); else json({ ok: true });
     });
 
-  } else if (req.url === '/speaker/set' && req.method === 'POST') {
+  } else if (reqPath === '/speaker/set' && req.method === 'POST') {
     try {
       const { id } = JSON.parse(await readBody(req));
       execFile(SVV, ['/SetDefault', id, 'all'], e => {
@@ -801,7 +848,7 @@ const server = http.createServer(async (req, res) => {
       });
     } catch (e) { err500(e.message); }
 
-  } else if (req.url === '/mic/set' && req.method === 'POST') {
+  } else if (reqPath === '/mic/set' && req.method === 'POST') {
     try {
       const { id } = JSON.parse(await readBody(req));
       execFile(SVV, ['/SetDefault', id, 'all'], e => {
@@ -812,42 +859,52 @@ const server = http.createServer(async (req, res) => {
       });
     } catch (e) { err500(e.message); }
 
-  } else if (req.url === '/notes' && req.method === 'GET') {
+  } else if (reqPath === '/notes' && req.method === 'GET' && !urlObj.searchParams.has('save')) {
     fs.promises.readFile(NOTES_FILE, 'utf8')
-      .then(text => json({ text }))
+      .then(notes => json({ notes }))
       .catch(e => {
-        if (e.code === 'ENOENT') json({ text: '' });
+        if (e.code === 'ENOENT') json({ notes: '' });
         else err500(e.message);
       });
 
-  } else if (req.url === '/notes' && req.method === 'POST') {
+  } else if (reqPath === '/notes' && (req.method === 'POST' || (req.method === 'GET' && urlObj.searchParams.has('save')))) {
     try {
-      const { text } = JSON.parse(await readBody(req));
+      let notes;
+      if (req.method === 'GET') {
+        notes = urlObj.searchParams.get('data') || '';
+      } else {
+        const body = JSON.parse(await readBody(req));
+        notes = typeof body.notes === 'string' ? body.notes : (typeof body.text === 'string' ? body.text : '');
+      }
       // Cap at 200 KB to prevent disk exhaustion via repeated saves.
-      const raw = typeof text === 'string' ? text : '';
-      const safe = raw.length > 200_000 ? raw.slice(0, 200_000) : raw;
+      const safe = String(notes).slice(0, 200_000);
       fs.promises.writeFile(NOTES_FILE, safe, 'utf8')
         .then(() => json({ ok: true, savedAt: Date.now() }))
         .catch(e => err500(e.message));
     } catch (e) { err500(e.message); }
 
-  } else if (req.url === '/events' && req.method === 'GET') {
+  } else if (reqPath === '/events' && req.method === 'GET' && !urlObj.searchParams.has('save')) {
     try { json({ events: await readEvents() }); }
     catch (e) { err500(e.message); }
 
-  } else if (req.url === '/events' && req.method === 'POST') {
+  } else if (reqPath === '/events' && (req.method === 'POST' || (req.method === 'GET' && urlObj.searchParams.has('save')))) {
     try {
-      const body = JSON.parse(await readBody(req));
+      let body;
+      if (req.method === 'GET') {
+        body = JSON.parse(urlObj.searchParams.get('data') || '[]');
+      } else {
+        body = JSON.parse(await readBody(req));
+      }
       const events = await writeEvents(body.events || body);
       json({ ok: true, events, savedAt: Date.now() });
     } catch (e) { err500(e.message); }
 
-  } else if (req.url === '/lock' && req.method === 'POST') {
+  } else if (reqPath === '/lock' && req.method === 'POST') {
     exec('rundll32.exe user32.dll,LockWorkStation', e => {
       if (e) err500(e.message); else json({ ok: true });
     });
 
-  } else if (req.url === '/shortcut' && req.method === 'POST') {
+  } else if (reqPath === '/shortcut' && req.method === 'POST') {
     try {
       const { keys } = JSON.parse(await readBody(req));
       // Strict whitelist: only SendKeys notation characters
@@ -882,24 +939,31 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
-server.listen(3030, '127.0.0.1', () => {
-  console.log('Widget server running on http://127.0.0.1:3030');
-  // Pre-populate device cache so mute/volume work immediately without waiting for /audio.
-  // Sync the in-memory `isMuted` flag with the actual Windows mic state instead of
-  // forcing an unmute at startup (which would surprise users).
-  getAudioInfo().then(info => {
-    if (info && info.mic && typeof info.mic.muted === 'boolean') isMuted = info.mic.muted;
-    console.log('Speaker cache:', cachedSpeakerId);
-    console.log('Mic cache:   ', cachedMicId);
-    console.log('Mic muted:   ', isMuted);
-  }).catch(e => console.error('Audio init failed:', e.message));
-});
+function _startListen(host) {
+  server.listen(3030, host, () => {
+    console.log('Widget server running on http://' + host + ':3030');
+    getAudioInfo().then(info => {
+      if (info && info.mic && typeof info.mic.muted === 'boolean') isMuted = info.mic.muted;
+      console.log('Speaker cache:', cachedSpeakerId);
+      console.log('Mic cache:   ', cachedMicId);
+      console.log('Mic muted:   ', isMuted);
+    }).catch(e => console.error('Audio init failed:', e.message));
+  });
+}
 
 server.on('error', err => {
   if (err.code === 'EADDRINUSE') {
     console.error('Porta 3030 già in uso. Chiudi l\'altro processo node prima di riavviare.');
     process.exit(1);
+  } else if ((err.code === 'EAFNOSUPPORT' || err.code === 'EADDRNOTAVAIL') && server.listening === false) {
+    // IPv6 not available on this system — fall back to IPv4 loopback
+    console.warn('IPv6 non disponibile, fallback a 127.0.0.1');
+    _startListen('127.0.0.1');
   } else {
     throw err;
   }
 });
+
+// Try IPv6 dual-stack first (accepts both 127.0.0.1 and ::1).
+// Falls back to IPv4 via the error handler if IPv6 is unavailable.
+_startListen('::');

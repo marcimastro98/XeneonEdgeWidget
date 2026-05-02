@@ -28,14 +28,10 @@
 
     if (!Hub.state.serverOnline) return;
     try {
-      const ctrl = new AbortController();
-      setTimeout(() => ctrl.abort(), 3000);
-      await fetch(Hub.state.serverUrl + '/notes', {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ notes: text }),
-        signal:  ctrl.signal
-      });
+      // Only sync via GET if the payload fits in a safe URL length.
+      if (text.length <= 4000) {
+        await Hub.fetchJson('/notes?save=1&data=' + encodeURIComponent(text));
+      }
     } catch (_) { /* server unreachable — already saved locally */ }
   }
 
@@ -52,12 +48,8 @@
 
     if (!Hub.state.serverOnline) return;
     try {
-      const ctrl = new AbortController();
-      setTimeout(() => ctrl.abort(), 3000);
-      const res  = await fetch(Hub.state.serverUrl + '/notes', { signal: ctrl.signal });
-      if (!res.ok) return;
-      const data = await res.json();
-      if (typeof data.notes === 'string') {
+      const data = await Hub.fetchJson('/notes');
+      if (data && typeof data.notes === 'string') {
         Hub.state.notes = data.notes;
         Hub.saveNotes(data.notes);
         const area = document.getElementById('notes-area');

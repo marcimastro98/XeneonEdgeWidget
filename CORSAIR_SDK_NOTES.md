@@ -4,7 +4,7 @@
 **Author:** marcimastro98  
 **SDK API version:** 1.0.1  
 **Target device:** `dashboard_lcd` (Corsair Xeneon Edge 14.5")  
-**Date:** 2026-05-02
+**Date:** 2026-05-02 (last revised 2026-05-02)
 
 ---
 
@@ -14,27 +14,38 @@ XenonEdge Hub is an all-in-one dashboard widget for the Xeneon Edge 14.5" LCD. I
 - Real-time hardware sensors (CPU, GPU, RAM, disk, network)
 - Now-playing media info with transport controls
 - Microphone mute state and audio volume
-- A full calendar with event management
+- A full calendar with event management and reminder notifications
 - Sticky notes
 - System uptime and clock
+
+The **companion web dashboard** (served at `localhost:3030`) additionally supports: one-tap screen lock, app-switcher (window enumeration + focus), and custom keyboard shortcut buttons. These features require OS-level APIs not available in the iCUE widget sandbox (see §3.8, §3.9, §3.10).
 
 The widget uses a **hybrid data model**: the iCUE SDK provides sensor values and basic media info; a **companion Node.js server** (`http://localhost:3030`, optional) enriches the experience with features the SDK does not expose. All panels degrade gracefully when the server is offline — they show a disabled overlay and, where relevant, a `ms-settings:` deep link as fallback.
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                       XenonEdge Hub Widget                       │
-│                                                                  │
-│  iCUE SDK (always)          Local Server (optional, :3030)       │
-│  ─────────────────          ───────────────────────────────────  │
-│  • Sensor values (load,     • Mic mute state + volume control    │
-│    temp, fan, etc.)         • Speaker volume + mute              │
-│  • Media title / artist     • Album art (thumbnail)              │
-│  • Media transport          • Playback status (play/paused)      │
-│    (play/pause/next/prev)   • Current app name                   │
-│  • Appearance properties    • Network throughput (up/down)       │
-│  • Link opening             • Disk usage (all drives)            │
-│                             • System uptime                      │
-└─────────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────┐
+│                        XenonEdge Hub Widget                       │
+│                                                                   │
+│  iCUE SDK (always)           Local Server (optional, :3030)       │
+│  ─────────────────           ───────────────────────────────────  │
+│  • Sensor values (load,      • Mic mute state + volume control    │
+│    temp, fan, etc.)          • Speaker volume + mute              │
+│  • Media title / artist      • Album art (thumbnail)              │
+│  • Media transport           • Playback status (play/paused)      │
+│    (play/pause/next/prev)    • Current app name                   │
+│  • Appearance properties     • Network throughput (up/down)       │
+│  • Link opening              • Disk usage (all drives)            │
+│                              • System uptime                      │
+│                              • Screen lock (LockWorkStation)      │
+│                              • App switcher + window focus        │
+│                              • Custom keyboard shortcuts          │
+│                                                                   │
+│  Always offline (no SDK/server needed)                            │
+│  ─────────────────────────────────────────────────────────────   │
+│  • Calendar + events (localStorage)                               │
+│  • Notes (localStorage)                                           │
+│  • Clock + appearance settings                                    │
+└──────────────────────────────────────────────────────────────────┘
 ```
 
 ---
@@ -135,11 +146,20 @@ Each entry includes the consequence and the workaround implemented.
 - Querying or setting speaker mute state
 - Enumerating audio devices
 
-**Consequence:** The entire mic-mute and audio-volume section of the widget cannot function in iCUE-only mode.
+**Consequence:** The entire audio and microphone section of the widget is **fully non-functional** in iCUE-only mode. The panel renders its buttons and sliders, but none of them perform any actual audio operation. The only action available is opening `ms-settings:sound` via `Linkprovider.open()`, which is a passive link — it opens the Windows Sound settings page in the background and does nothing to the audio state itself.
+
+Specifically, the following features are **completely unavailable** without the companion server:
+- Reading microphone mute state (the icon is always indeterminate)
+- Toggling microphone mute
+- Reading or changing microphone volume
+- Reading or changing speaker volume
+- Muting/unmuting the speaker
+- Listing or switching between audio devices (microphone and speaker)
 
 **Workaround implemented:**
-- Companion server uses the Windows Core Audio API (via the `node-speaker-volume` / `naudiodon` / `win-audio` Node.js packages) to expose `/status` (mic mute), `/toggle` (toggle mic mute), `/audio` (all volumes), `/mic/volume`, `/volume/set`, `/speaker/mute`.
-- When the server is offline, the mic panel shows a "Server required" overlay. Tapping the button opens `ms-settings:sound` via `Linkprovider.open()` as a fallback.
+- Companion server exposes: `/status` (mic mute state), `/toggle` (toggle mic mute), `/audio` (all current volumes), `/mic/volume` (set mic volume), `/volume/set` (set speaker volume), `/speaker/mute` (toggle speaker mute), audio device picker endpoints.
+- All of these call Windows Core Audio (`IAudioEndpointVolume`, `IMMDeviceEnumerator`) through Node.js native bindings.
+- When the server is offline, the audio panel shows a "Server required" overlay with a link that opens `ms-settings:sound`. This is purely informational — it does not give the user any control.
 
 **Feature request:** Add an `Audiodataprovider` plugin with:
 - `getMicMuted(): boolean`
@@ -171,21 +191,133 @@ The Windows Core Audio (`IAudioEndpointVolume`) and MMDevice APIs are well-suppo
 
 ---
 
-### 3.6 No App Launcher / Window Enumeration API
+### 3.6 No RAM Utilization Sensor Type
 
-**Gap:** There is no SDK method to enumerate running applications, launch executables, or switch to a running window.
+**Gap:** There is no sensor type that maps to RAM utilization (percentage of RAM in use). The available types (`load`, `temperature`, `fan`, `voltage`, `current`, `power`, `pump`, `battery-charge`, `fps`, `cas-latency`) do not include memory load.
 
-**Consequence:** An "App shortcuts" panel (quick launch / app switcher) is not implementable with the SDK alone.
+**Observed:** On the test system (Windows 11, DDR5), the iCUE hardware monitor shows RAM speed (MHz) and RAM temperature sensors but no percentage-utilization sensor for memory. The `load` type auto-selects a CPU or GPU load sensor, never a RAM utilization value.
 
-**Workaround:** Not implemented — excluded from this widget's scope. Noted as a future feature pending SDK support or a dedicated `Launchprovider` plugin.
+**Consequence:** The `ramLoadSensor` combobox has `data-default="''"` (empty). Users must find and manually select the correct sensor — if one even exists for their hardware configuration. In practice, most users will see the RAM panel showing `--` until they configure it or until the companion server is online (which reads `os.totalmem()` / `os.freemem()` directly).
 
-**Feature request:** Add a `Launchprovider` plugin with `launch(path: string): void` to complement the existing `Linkprovider`, specifically for local executables.
+**Workaround:** Companion server reads `os.totalmem()` and `os.freemem()` and computes usage percentage. This is the primary RAM utilization source.
+
+**Feature request:** Add `'memory'` or `'ram-utilization'` as a valid type for `getDefaultSensorIdBlock()`, or provide a dedicated property that reads available/used memory without requiring a sensor.
+
+---
+
+### 3.7 No GPU VRAM Utilization Default Sensor
+
+**Gap:** GPU VRAM load (video memory usage percentage) is exposed in iCUE's hardware monitor as a sensor (observed: "NVIDIA GeForce RTX 5080 GPU Carico di memoria"), but there is no sensor type to auto-default it via `getDefaultSensorIdBlock()`.
+
+**Consequence:** The `gpuMemLoadSensor` combobox defaults to empty. Users must manually select the VRAM sensor from a long sensor list.
+
+**Workaround:** `data-default="''"`. The `gpu-vram-value` detail line in the GPU panel shows "VRAM --" until the user configures the sensor.
+
+**Feature request:** Add `'gpu-memory'` or `'vram'` as a valid type for `getDefaultSensorIdBlock()`.
+
+---
+
+### 3.8 No App Launcher / Window Enumeration / Focus API
+
+**Gap:** There is no SDK method to:
+- Enumerate currently running applications or open windows
+- Launch a local executable by path
+- Focus or bring a running window to the foreground (equivalent to Alt+Tab navigation)
+
+**Consequence:**
+- An **app switcher** panel (show open windows, click to focus — like Alt+Tab) is not implementable. On the companion server this works via `GET /windows` (Win32 `EnumWindows`) and `POST /windows/focus` (`SetForegroundWindow`), but there is no equivalent in the widget sandbox.
+- A **quick-launch panel** (click to open Spotify, VS Code, etc.) cannot open executables — only URLs and `ms-settings:*` deep links are available via `Linkprovider`.
+- **Alt+Tab style navigation** from the widget is impossible in iCUE-only mode.
+
+**How it works in the companion server:**
+- `GET /windows` returns a list of all open windows with app name, title, icon, and preview thumbnail.
+- `POST /windows/focus` calls `SetForegroundWindow(hwnd)` to switch to a specific window.
+- The web widget renders a scrollable app-switcher panel with clickable window cards and a "favorites" quick bar.
+
+**Workaround in iCUE widget:** Not implemented — excluded from iCUE widget scope. The feature requires OS-level process enumeration and Win32 window management calls that are not available from a sandboxed WebView.
+
+**Feature request:** Add a `Launchprovider` plugin with:
+- `launch(path: string): void` — open a local executable
+- `getOpenWindows(): Promise<WindowInfo[]>` — enumerate open windows
+- `focusWindow(id: string): void` — bring a window to the foreground
+
+---
+
+### 3.9 No Screen Lock API
+
+**Gap:** There is no SDK method to lock the Windows session (equivalent to Win+L or `rundll32.exe user32.dll,LockWorkStation`).
+
+**Consequence:** The one-tap screen lock button, which is a top-bar feature in the companion web widget, cannot be implemented in the iCUE widget sandbox. The widget cannot execute processes or make Win32 API calls.
+
+**How it works in the companion server:** The web widget has a lock button in the top bar (`qbtn-lock`). On click, it calls `POST /lock` on the local server, which executes:
+```js
+exec('rundll32.exe user32.dll,LockWorkStation', ...)
+```
+This immediately locks the Windows session. The feature is fully functional in the server version.
+
+**Workaround in iCUE widget:** `Linkprovider.open('ms-settings:lockscreen')` opens the Lock Screen settings page — it does **not** lock the session. There is no usable fallback; the feature must be omitted from the iCUE widget version.
+
+**Feature request:** Add a `SystemProvider` plugin (or extend `Linkprovider`) with:
+- `lockScreen(): void` — locks the current Windows session
+- Optionally: `sleep(): void`, `shutdown(): void`, `restart(): void`
+
+The underlying Win32 call (`LockWorkStation`) is trivial and poses no security risk beyond what iCUE already does with its lighting and device control capabilities.
+
+---
+
+### 3.10 No Keyboard Shortcut / SendKeys API
+
+**Gap:** There is no SDK method to inject keyboard input into the OS — no equivalent of `SendKeys`, `SendInput`, or `keybd_event`. It is not possible to programmatically press a key combination (e.g., Ctrl+Shift+S, Win+D) from within the widget sandbox.
+
+**Consequence:** A **custom shortcuts panel** — where users define labeled buttons that fire arbitrary key combinations — is not implementable in the iCUE widget. On the companion server this is implemented via `POST /shortcut`, which uses a native Node.js addon or `robotjs` to call `SendInput()` with the requested key sequence. The web widget exposes a full shortcut builder UI (label, key combo recorder, color picker) that renders as colored quick-action buttons in the toolbar.
+
+**How it works in the companion server:**
+- User defines shortcuts in the web widget UI (e.g., label "Mute Discord", keys `Ctrl+Shift+M`).
+- Shortcut data is persisted in `localStorage`.
+- On button press, the widget calls `POST /shortcut` with the key combo.
+- The server calls `SendInput()` / `robotjs.keyTap()` to fire the keystrokes system-wide, regardless of which application is in focus.
+
+**Workaround in iCUE widget:** Not implemented. The `apps.js` module exists in the project structure but is not loaded in the iCUE widget's `index.html` because keyboard injection requires the companion server. A partial version (bookmarks/`ms-settings:*` links only) is a future candidate.
+
+**Feature request:** Add a `KeyboardProvider` plugin or extend `Linkprovider` with:
+- `sendKeys(combo: string): void` — fires a key combination OS-wide (e.g., `"ctrl+shift+m"`)
+
+This would enable macro/shortcut buttons directly from a widget without requiring a companion process.
 
 ---
 
 ## 4. Technical Constraints Discovered During Development
 
 These are implementation-level constraints not documented in the official spec that required non-obvious workarounds.
+
+---
+
+### 4.0 `getDefaultSensorIdBlock()` Returns the Same Sensor ID for All Fields of the Same Type
+
+**What happens:** When multiple `sensors-combobox` properties all use `data-default="plugins.Sensorsdataprovider.getDefaultSensorIdBlock('load')"`, they all resolve to the **same sensor ID** — the single "best match" iCUE finds for that category. There is no round-robin or per-field differentiation.
+
+**Example observed on the test system:**
+
+| Property | Configured default type | Actual sensor assigned |
+|---|---|---|
+| `cpuLoadSensor` | `'load'` | NVIDIA GeForce RTX 5080 GPU Carico #1 (GPU load!) |
+| `gpuLoadSensor` | `'load'` | NVIDIA GeForce RTX 5080 GPU Carico #1 (same) |
+| `cpuTempSensor` | `'temperature'` | VENGEANCE RGB DD...5 Temperatura #1 (RAM temp!) |
+| `gpuTempSensor` | `'temperature'` | VENGEANCE RGB DD...5 Temperatura #1 (same) |
+
+The "best match" iCUE selects depends on hardware and sensor order in the iCUE database — it may not be what the label implies. On this system, the default temperature sensor was a DDR5 module rather than the CPU or GPU.
+
+**Consequence:** Out-of-the-box, the CPU panel might show GPU load, and both temperature panels might show RAM temperature. Users must manually correct each sensor in widget settings.
+
+**Fix applied:** We set `data-default="''"` for `ramLoadSensor` (no RAM utilization sensor exists anyway) and `gpuMemLoadSensor`. For the core CPU/GPU load and temp sensors, we keep `getDefaultSensorIdBlock` defaults since there is no better API, but we document that manual reconfiguration is expected.
+
+**Feature request:** Add typed overloads that hint at the target device, e.g.:
+- `getDefaultSensorIdBlock('load', 'cpu')` → CPU load
+- `getDefaultSensorIdBlock('load', 'gpu')` → GPU load
+- `getDefaultSensorIdBlock('temperature', 'cpu')` → CPU temp
+- `getDefaultSensorIdBlock('temperature', 'gpu')` → GPU temp
+
+This would dramatically improve first-run experience without requiring manual configuration.
 
 ---
 
@@ -209,12 +341,34 @@ The V4 engine does not support ES6 default parameter syntax. When parsing a para
 
 Additionally, template literals (`` `translate(${x}px)` ``) were replaced with string concatenation as a precaution.
 
-**Fix applied:** Replaced all default parameters with manual fallbacks:
+**Fix applied — all three ES6 patterns removed from inline `<head>` scripts:**
+
+1. Default parameters → manual fallback:
 ```js
-constructor(options) {
-  options = options || {};
-  // ...
-}
+// Before:
+constructor(options = {}) { ... }
+applyTransform(params = {}) { ... }
+loadMedia(params = {}) { ... }
+// After:
+constructor(options) { options = options || {}; ... }
+```
+
+2. Rest parameters + spread → explicit two-param signatures:
+```js
+// Before:
+log(...a)   { if (this.debug) console.log('[MediaViewer]', ...a); }
+warn(...a)  { if (this.debug) console.warn('[MediaViewer]', ...a); }
+error(...a) { console.error('[MediaViewer]', ...a); }
+// After:
+log(a, b)   { if (this.debug) console.log('[MediaViewer]', a, b); }
+warn(a, b)  { if (this.debug) console.warn('[MediaViewer]', a, b); }
+error(a, b) { console.error('[MediaViewer]', a, b); }
+```
+
+3. Template literals → string concatenation:
+```js
+// Before: `translate(${x}px, ${y}px)`
+// After:  'translate(' + x + 'px, ' + y + 'px)'
 ```
 
 **Why this is hard to find:** The `icuewidget validate` CLI does not run the settings groups phase — it only checks file structure and manifest. The error only surfaces at iCUE runtime, and iCUE silently deletes the widget folder as a consequence, making the symptom (import fails) appear unrelated to its cause.
@@ -225,28 +379,39 @@ constructor(options) {
 
 ---
 
-### 4.2 `icuewidget package` Produces a Flat Zip (No Subfolder)
+### 4.2 Import Dialog Error Diagnostic Chain — "File not supported or corrupted" Masks Other Failures
 
-**What happens:** The `icuewidget package` CLI (v0.2.3) creates a `.icuewidget` archive with all files at the **root of the zip**, e.g.:
+**What happens:** The iCUE import dialog returns the generic error "File not supported or corrupted" (`File non supportato o danneggiato`) as a catch-all for multiple different failure types. This error is shown both when the zip file itself is malformed AND when the widget inside fails settings groups validation.
+
+**The actual cascade we experienced:**
+
+1. **Initial state** (V4 syntax errors present): Import dialog opens zip → V4 engine evaluates inline `<head>` scripts → throws `SyntaxError: Expected token ','` → import reports "File not supported or corrupted".
+
+2. **After V4 fix** (default parameters removed): Import dialog opens zip → V4 evaluation succeeds → `html_parser` looks for `index.html` at zip root → **found** → import proceeds correctly.
+
+The log trace that helped identify stage 2:
+```
+10:42:17.607 W cue.mod.widgets.html_parser: Widget file is missing: index.html
+```
+This appeared only after the V4 fix was applied (using a zip with a wrong subfolder structure added as an earlier false fix). Removing the subfolder resolved it.
+
+**Correct zip structure** (flat, files at root — produced by `icuewidget package` by default):
 ```
 manifest.json
 index.html
 styles/main.css
+modules/app.js
 ...
 ```
 
-**Problem:** iCUE's import dialog (`cue.mod.widgets.html_registry`) expects files to be inside a **subfolder named after the widget ID**:
-```
-com.marcimastro98.xenonedgehub/manifest.json
-com.marcimastro98.xenonedgehub/index.html
-com.marcimastro98.xenonedgehub/styles/main.css
-...
-```
-Without this subfolder, the import dialog shows "File not supported or corrupted" (`File non supportato o danneggiato` in Italian) and rejects the package.
+**False lead documented:** At an earlier stage, before the V4 fix, we mistakenly added a `repackWithSubfolder()` step to our packager believing the subfolder was required. Log evidence later showed the flat structure is correct and the subfolder causes `html_parser: Widget file is missing: index.html`. That step has been removed.
 
-**Fix applied:** Added a `repackWithSubfolder()` step to our custom packager (`tools/package-icue-widget.mjs`) that runs after `icuewidget package`. It uses PowerShell's `System.IO.Compression.ZipFile` to rewrite the archive with all entries prefixed by the widget ID.
+**Recommendation:** The import dialog should return distinct error messages for:
+- Malformed zip → "File not supported or corrupted" (current, appropriate)
+- Widget JS validation failure → "Widget settings could not be loaded — check JS syntax"
+- Missing `index.html` → "Widget package is missing index.html"
 
-**Recommendation:** Fix the `icuewidget package` CLI to produce archives with the required subfolder structure, or document this requirement explicitly. Currently, the produced `.icuewidget` file is structurally invalid for the import dialog.
+Collapsing all three into the same error message blocks developers from diagnosing the root cause.
 
 ---
 
@@ -300,6 +465,44 @@ data-filters="['*.webm', '*.mp4', '*.mkv', '*.gif', '*.png', '*.jpg', '*.jpeg', 
 
 ---
 
+### 4.7 Calendar Reminders — In-Widget Toast Works; Desktop Notifications Are Best-Effort
+
+**What is implemented:** The widget includes a full event/reminder engine in `modules/calendar.js`. Events are persisted in `localStorage`. When a reminder's scheduled time arrives, the engine (polled every 30 seconds via `setInterval`):
+1. Shows an in-widget slide-up toast at the bottom of the display with the event title and time.
+2. Plays a two-tone chime via the **Web Audio API** (`AudioContext` oscillator — no external file required).
+3. Attempts a browser-style `new Notification(title, { body, requireInteraction: true })` for a desktop notification.
+
+**What works reliably:** The in-widget toast is guaranteed to fire as long as iCUE is running with the widget loaded. The toast is fully implemented and tested.
+
+**What is uncertain:**
+- **Web Audio API in iCUE's WebView**: `AudioContext` is a Chromium API. Most Chromium-based environments allow audio from timers/intervals as long as the page has received at least one prior user gesture. If the WebView has never received a pointer event, the AudioContext may be suspended and the chime will not play. The code falls back silently (`try/catch`); the toast still shows.
+- **`Notification` API in iCUE's WebView**: iCUE uses a Chromium-based WebView. Whether `Notification.requestPermission()` succeeds and whether desktop notifications actually appear as OS-level notifications in this sandboxed context has not been confirmed. The code tries it, catches any failure silently, and falls back to the in-widget toast.
+- **Widget must be active**: Reminders only fire while iCUE is running AND the widget is loaded. If iCUE is closed, no reminder will trigger — there is no background process that can fire notifications independently of iCUE.
+
+**Recommendation:** A native `pushNotification(title, body)` method in the SDK would allow widgets to fire OS-level notifications through iCUE's own notification system, which has the correct process permissions and could persist across widget unloads.
+
+---
+
+### 4.8 `user-select: none` on `<body>` Blocks Keyboard Input in Qt WebEngine
+
+**What happens:** Setting `user-select: none` (or `-webkit-user-select: none`) on `html` or `body` is standard practice in widget UIs to prevent accidental text selection on drag/tap. However, in Qt WebEngine (the rendering engine used by iCUE), this CSS property **cascades into form fields** (`<input>`, `<textarea>`) and silently disables keyboard input — the fields receive focus and click events, but typed characters are never inserted.
+
+**Symptom:** Clicking on any text input or textarea in the widget appears to focus it (cursor may blink), but typing on the keyboard has no effect. The field stays empty.
+
+**Root cause:** Unlike standard desktop Chrome, Qt WebEngine does not automatically override the inherited `user-select: none` for editable form elements. The restriction propagates all the way down, including to elements that should inherently accept text.
+
+**Fix applied in `widget/styles/main.css`:**
+```css
+/* Restore keyboard input for all form fields, overriding body's user-select: none */
+input, textarea { outline: none; -webkit-user-select: text; user-select: text; }
+```
+
+The `-webkit-` prefix is needed because Qt WebEngine uses a WebKit-derived rendering pipeline even though it is Chromium-based.
+
+**Note for other widget developers:** If your widget uses `user-select: none` on a high-level element (common for preventing selection in drag UI or touchscreen-style widgets), always add `user-select: text` explicitly to any `<input>`, `<textarea>`, or `[contenteditable]` element. Do not rely on the browser's automatic override — Qt WebEngine does not apply it.
+
+---
+
 ## 5. Summary Table — SDK Gaps and Feature Requests
 
 | Missing Feature | Impact | Suggested Plugin / Method |
@@ -311,7 +514,15 @@ data-filters="['*.webm', '*.mp4', '*.mkv', '*.gif', '*.png', '*.jpg', '*.jpeg', 
 | Speaker volume / mute | Entire audio section disabled without server | New `Audiodataprovider` plugin |
 | Default audio device names | Cannot label inputs/outputs | `Audiodataprovider.getDefaultMicName()`, `getDefaultSpeakerName()` |
 | Network throughput sensor type | Network panel requires server | `getDefaultSensorIdBlock('throughput')` |
-| App launch / open executable | No app-launcher panel possible | New `Launchprovider` plugin with `launch(path)` |
+| RAM utilization sensor type | RAM panel always `--` in SDK-only mode | `getDefaultSensorIdBlock('memory')` or dedicated memory API |
+| GPU VRAM load default | VRAM panel always `--` until manually configured | `getDefaultSensorIdBlock('gpu-memory')` or `'vram'` |
+| Per-device sensor defaults | All same-type sensors share one default — wrong first-run values | `getDefaultSensorIdBlock(type, device)` typed overload |
+| App launch / open executable | No quick-launch panel possible | New `Launchprovider` plugin with `launch(path)` |
+| Window enumeration + focus (Alt+Tab) | No app-switcher panel; cannot bring window to foreground | `Launchprovider.getOpenWindows()` + `focusWindow(id)` |
+| Keyboard shortcut injection | Custom macro/shortcut buttons not possible | New `KeyboardProvider` plugin with `sendKeys(combo)` |
+| Screen lock | Lock button omitted from iCUE version; `ms-settings:lockscreen` does not lock the session | New `SystemProvider` plugin with `lockScreen()` |
+| Reliable push notifications | Desktop reminders unverified in sandboxed WebView | Native `pushNotification(title, body)` in SDK |
+| Reminder audio chime | Web Audio API attempted; may be silenced if no prior user gesture | Native `playNotificationSound()` or permission bypass for trusted widgets |
 
 ---
 
@@ -319,11 +530,12 @@ data-filters="['*.webm', '*.mp4', '*.mkv', '*.gif', '*.png', '*.jpg', '*.jpeg', 
 
 | Issue | Severity | Status |
 |---|---|---|
-| `icuewidget package` produces flat zip (no subfolder) | Blocker for import dialog | Worked around in custom packager |
+| Import dialog returns same generic error for JS failures AND structural errors | High — impossible to diagnose root cause | Document each failure mode |
 | `icuewidget validate` does not run V4 settings groups evaluation | High — hides runtime errors | No workaround; need CLI fix |
 | V4 evaluates inline `<head>` scripts — ES6 default params unsupported | High — silent widget deletion | Fixed by replacing default params |
 | `data-filters` required but undocumented for `media-selector` | Medium — blocks validation | Fixed; needs doc update |
 | Widget folder silently deleted on V4 error | High — no UX feedback | Needs runtime fix from Corsair |
+| `user-select: none` on body disables form input in Qt WebEngine | Medium — all text inputs break silently | Fixed: `user-select: text` on `input, textarea` in CSS |
 
 ---
 

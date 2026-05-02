@@ -55,12 +55,8 @@
   Hub.syncEventsFromServer = async function () {
     if (!Hub.state.serverOnline) return;
     try {
-      const ctrl = new AbortController();
-      setTimeout(() => ctrl.abort(), 3000);
-      const res = await fetch(Hub.state.serverUrl + '/events', { signal: ctrl.signal });
-      if (!res.ok) return;
-      const data = await res.json();
-      if (Array.isArray(data.events)) {
+      const data = await Hub.fetchJson('/events');
+      if (data && Array.isArray(data.events)) {
         Hub.state.events = data.events;
         Hub.saveEvents();
       }
@@ -74,14 +70,11 @@
     Hub.saveEvents();
     if (!Hub.state.serverOnline) return;
     try {
-      const ctrl = new AbortController();
-      setTimeout(() => ctrl.abort(), 3000);
-      await fetch(Hub.state.serverUrl + '/events', {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ events: Hub.state.events }),
-        signal:  ctrl.signal
-      });
+      const raw = JSON.stringify(Hub.state.events);
+      // Only sync via GET if the payload fits in a safe URL length.
+      if (raw.length <= 6000) {
+        await Hub.fetchJson('/events?save=1&data=' + encodeURIComponent(raw));
+      }
     } catch (_) { /* ignore — already saved locally */ }
   };
 }());

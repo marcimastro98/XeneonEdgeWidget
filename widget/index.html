@@ -29,10 +29,15 @@
         data-type="sensors-combobox"
         data-default="plugins.Sensorsdataprovider.getDefaultSensorIdBlock('temperature')">
 
+  <meta name="x-icue-property" content="gpuMemLoadSensor"
+        data-label="tr('GPU VRAM Load Sensor')"
+        data-type="sensors-combobox"
+        data-default="''">
+
   <meta name="x-icue-property" content="ramLoadSensor"
         data-label="tr('RAM Load Sensor')"
         data-type="sensors-combobox"
-        data-default="plugins.Sensorsdataprovider.getDefaultSensorIdBlock('load')">
+        data-default="''">
 
   <meta name="x-icue-property" content="diskTempSensor"
         data-label="tr('Disk Temperature Sensor')"
@@ -119,7 +124,7 @@
       "title": "tr('Sensors')",
       "properties": [
         "cpuLoadSensor", "cpuTempSensor",
-        "gpuLoadSensor", "gpuTempSensor",
+        "gpuLoadSensor", "gpuTempSensor", "gpuMemLoadSensor",
         "ramLoadSensor", "diskTempSensor",
         "netUploadSensor", "netDownloadSensor"
       ]
@@ -168,9 +173,9 @@
       getFileExtension(p) { return p.split('.').pop().toLowerCase(); }
       isImageFile(e) { return this.supportedImageFormats.includes(e); }
       isVideoFile(e) { return this.supportedVideoFormats.includes(e); }
-      log(...a)   { if (this.debug) console.log('[MediaViewer]', ...a); }
-      warn(...a)  { if (this.debug) console.warn('[MediaViewer]', ...a); }
-      error(...a) { console.error('[MediaViewer]', ...a); }
+      log(a, b)   { if (this.debug) console.log('[MediaViewer]', a, b); }
+      warn(a, b)  { if (this.debug) console.warn('[MediaViewer]', a, b); }
+      error(a, b) { console.error('[MediaViewer]', a, b); }
       createImageElement(filePath) {
         const img = document.createElement('img');
         img.src     = filePath;

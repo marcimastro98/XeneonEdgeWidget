@@ -15,6 +15,9 @@
 (function () {
   const Hub = window.XenonEdgeHub;
 
+  // Cooldown: don't override optimistic play/pause state for 3 s after user action
+  let _lastPlayPauseAction = 0;
+
   // ── iCUE media polling ────────────────────────────────────────────────────
 
   /**
@@ -35,8 +38,9 @@
       Hub.state.media.active = active;
       Hub.state.media.title  = title  || '';
       Hub.state.media.artist = artist || '';
-      // Infer playback status (SDK gap: no direct status field)
-      if (!Hub.state.serverOnline) {
+      // Infer playback status (SDK gap: no direct status field).
+      // Skip for 3 s after a user-triggered play/pause to avoid overriding optimistic state.
+      if (!Hub.state.serverOnline && (Date.now() - _lastPlayPauseAction > 3000)) {
         Hub.state.media.playbackStatus = active ? 'Playing' : 'Paused';
       }
 
@@ -94,11 +98,8 @@
 
   Hub.fetchMediaFromServer = async function () {
     try {
-      const ctrl = new AbortController();
-      setTimeout(() => ctrl.abort(), 3000);
-      const res  = await fetch(Hub.state.serverUrl + '/media', { signal: ctrl.signal });
-      if (!res.ok) return;
-      const data = await res.json();
+      const data = await Hub.fetchJson('/media');
+      if (!data) return;
 
       Hub.state.media = {
         active:         !!(data.title || data.artist),
@@ -120,11 +121,7 @@
     // Try server first (more reliable for certain players)
     if (Hub.state.serverOnline) {
       try {
-        const ctrl = new AbortController();
-        setTimeout(() => ctrl.abort(), 2000);
-        await fetch(Hub.state.serverUrl + '/media/' + action, {
-          method: 'POST', signal: ctrl.signal
-        });
+        await Hub.fetchJson('/media/' + action);
         // Refresh state after a short delay for the player to respond
         setTimeout(Hub.fetchMediaFromServer, 400);
         return;
@@ -141,6 +138,7 @@
     }
     // Infer state change (SDK gap: no status signal)
     if (action === 'playpause') {
+      _lastPlayPauseAction = Date.now();
       Hub.state.media.playbackStatus =
         Hub.state.media.playbackStatus === 'Playing' ? 'Paused' : 'Playing';
       Hub._syncPlayPauseIcons();
@@ -152,11 +150,8 @@
 
   Hub.fetchAudioFromServer = async function () {
     try {
-      const ctrl = new AbortController();
-      setTimeout(() => ctrl.abort(), 3000);
-      const res  = await fetch(Hub.state.serverUrl + '/audio', { signal: ctrl.signal });
-      if (!res.ok) return;
-      const data = await res.json();
+      const data = await Hub.fetchJson('/audio');
+      if (!data) return;
 
       Hub.state.audio.speakerVolume = (data.speaker && data.speaker.volume  != null) ? data.speaker.volume  : 50;
       Hub.state.audio.speakerMuted  = (data.speaker && data.speaker.muted   != null) ? data.speaker.muted   : false;
@@ -171,11 +166,8 @@
 
   Hub.fetchMicStateFromServer = async function () {
     try {
-      const ctrl = new AbortController();
-      setTimeout(() => ctrl.abort(), 2000);
-      const res  = await fetch(Hub.state.serverUrl + '/status', { signal: ctrl.signal });
-      if (!res.ok) return;
-      const data = await res.json();
+      const data = await Hub.fetchJson('/status');
+      if (!data) return;
       Hub.state.audio.micMuted = !!data.muted;
       Hub.renderMicState();
     } catch (_) { /* ignore */ }
@@ -187,9 +179,7 @@
       return;
     }
     try {
-      const ctrl = new AbortController();
-      setTimeout(() => ctrl.abort(), 2000);
-      await fetch(Hub.state.serverUrl + '/toggle', { method: 'POST', signal: ctrl.signal });
+      await Hub.fetchJson('/toggle');
       await Hub.fetchMicStateFromServer();
     } catch (_) { /* ignore */ }
   };
@@ -199,14 +189,7 @@
     Hub.state.audio.micVolume = value;
     _renderMicVolumeUI(value);
     try {
-      const ctrl = new AbortController();
-      setTimeout(() => ctrl.abort(), 2000);
-      await fetch(Hub.state.serverUrl + '/mic/volume', {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ level: value }),
-        signal:  ctrl.signal
-      });
+      await Hub.fetchJson('/mic/volume?level=' + value);
     } catch (_) { /* ignore */ }
   };
 
@@ -215,14 +198,7 @@
     Hub.state.audio.speakerVolume = value;
     _renderSpeakerVolumeUI(value);
     try {
-      const ctrl = new AbortController();
-      setTimeout(() => ctrl.abort(), 2000);
-      await fetch(Hub.state.serverUrl + '/volume/set', {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ level: value }),
-        signal:  ctrl.signal
-      });
+      await Hub.fetchJson('/volume/set?level=' + value);
     } catch (_) { /* ignore */ }
   };
 
@@ -232,9 +208,7 @@
       return;
     }
     try {
-      const ctrl = new AbortController();
-      setTimeout(() => ctrl.abort(), 2000);
-      await fetch(Hub.state.serverUrl + '/speaker/mute', { method: 'POST', signal: ctrl.signal });
+      await Hub.fetchJson('/speaker/mute');
       await Hub.fetchAudioFromServer();
     } catch (_) { /* ignore */ }
   };

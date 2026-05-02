@@ -46,9 +46,10 @@
     // Fetch initial values for each configured sensor
     _fetchSensorValue('cpuLoad',  _extractSensorId(ids.cpuLoad));
     _fetchSensorValue('cpuTemp',  _extractSensorId(ids.cpuTemp));
-    _fetchSensorValue('gpuLoad',  _extractSensorId(ids.gpuLoad));
-    _fetchSensorValue('gpuTemp',  _extractSensorId(ids.gpuTemp));
-    _fetchSensorValue('ramLoad',  _extractSensorId(ids.ramLoad));
+    _fetchSensorValue('gpuLoad',    _extractSensorId(ids.gpuLoad));
+    _fetchSensorValue('gpuTemp',    _extractSensorId(ids.gpuTemp));
+    _fetchSensorValue('gpuMemLoad', _extractSensorId(ids.gpuMemLoad));
+    _fetchSensorValue('ramLoad',    _extractSensorId(ids.ramLoad));
     _fetchSensorValue('diskTemp', _extractSensorId(ids.diskTemp));
     // netUp / netDown intentionally skipped — SDK has no throughput sensor type
 
@@ -94,12 +95,13 @@
       // Map incoming sensorId to one of our tracked keys
       const ids = Hub.state.sensorIds;
       const keyMap = {
-        [_extractSensorId(ids.cpuLoad)]:  'cpuLoad',
-        [_extractSensorId(ids.cpuTemp)]:  'cpuTemp',
-        [_extractSensorId(ids.gpuLoad)]:  'gpuLoad',
-        [_extractSensorId(ids.gpuTemp)]:  'gpuTemp',
-        [_extractSensorId(ids.ramLoad)]:  'ramLoad',
-        [_extractSensorId(ids.diskTemp)]: 'diskTemp'
+        [_extractSensorId(ids.cpuLoad)]:    'cpuLoad',
+        [_extractSensorId(ids.cpuTemp)]:    'cpuTemp',
+        [_extractSensorId(ids.gpuLoad)]:    'gpuLoad',
+        [_extractSensorId(ids.gpuTemp)]:    'gpuTemp',
+        [_extractSensorId(ids.gpuMemLoad)]: 'gpuMemLoad',
+        [_extractSensorId(ids.ramLoad)]:    'ramLoad',
+        [_extractSensorId(ids.diskTemp)]:   'diskTemp'
       };
       const key = keyMap[sensorId];
       if (!key) return;
@@ -117,14 +119,21 @@
   /** Updates a single sensor metric in the DOM. */
   Hub.renderSensorValue = function (key, value) {
     switch (key) {
-      case 'cpuLoad':  _setMetric('cpu',  value, null); break;
-      case 'cpuTemp':  _setTemp('cpu-head-temp',  value, '°C'); break;
-      case 'gpuLoad':  _setMetric('gpu',  value, null); break;
-      case 'gpuTemp':  _setTemp('gpu-head-temp',  value, '°C'); break;
-      case 'ramLoad':  _setMetric('ram',  value, null); break;
-      case 'diskTemp': _setTemp('disk-small',     value, '°C'); break;
+      case 'cpuLoad':    _setMetric('cpu', value, null); break;
+      case 'cpuTemp':    _setTemp('cpu-head-temp', value, '°C'); break;
+      case 'gpuLoad':    _setMetric('gpu', value, null); break;
+      case 'gpuTemp':    _setTemp('gpu-head-temp', value, '°C'); break;
+      case 'gpuMemLoad': _setGpuVram(value); break;
+      case 'ramLoad':    _setMetric('ram', value, null); break;
+      case 'diskTemp':   _setTemp('disk-small', value, '°C'); break;
     }
   };
+
+  function _setGpuVram (pct) {
+    const el = document.getElementById('gpu-vram-value');
+    if (!el) return;
+    el.textContent = pct != null ? 'VRAM ' + pct + '%' : 'VRAM --';
+  }
 
   function _setMetric (prefix, pct, _unused) {
     const val  = document.getElementById(`${prefix}-value`);
@@ -164,6 +173,7 @@
       _setTemp('gpu-head-temp', data.gpu.temp, '°C');
       const caption = document.getElementById('gpu-caption');
       if (caption) caption.textContent = data.gpu.name || '';
+      if (data.gpu.vramLoad != null) _setGpuVram(data.gpu.vramLoad);
     }
 
     // RAM

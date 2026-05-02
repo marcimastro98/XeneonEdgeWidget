@@ -44,10 +44,14 @@
   }
 
   function _onIcueDataUpdated () {
+    const prevUrl = Hub.state.serverUrl;
     Hub.readProps();
     Hub.applyAppearance();
     // Re-bind sensors in case the user changed a sensor combobox
     Hub.bindSensors();
+    // If the server URL changed, re-check connectivity immediately instead of
+    // waiting for the next 30-second poll cycle.
+    if (Hub.state.serverUrl !== prevUrl) _checkServer();
   }
 
   // ── Plugin initialisation ─────────────────────────────────────────────────
@@ -136,14 +140,48 @@
   }
 
   async function _pingServer () {
-    try {
-      const ctrl = new AbortController();
-      setTimeout(() => ctrl.abort(), 2000);
-      const res = await fetch(Hub.state.serverUrl + '/status', { signal: ctrl.signal });
-      return res.ok;
-    } catch (_) {
-      return false;
-    }
+    // Use Image() instead of fetch() to probe server availability.
+    // In Qt WebEngine (iCUE's rendering engine), LocalContentCanAccessRemoteUrls
+    // is false by default, which silently blocks fetch()/XHR from file:// contexts.
+    // Image subresource loads use a different code path and are not blocked.
+    return new Promise(function (resolve) {
+      var img    = new Image();
+      var timer  = setTimeout(function () { img.src = ''; resolve(false); }, 2500);
+      img.onload = function () { clearTimeout(timer); resolve(true); };
+      img.onerror = function () { clearTimeout(timer); resolve(false); };
+      // Cache-bust so the browser always makes a real network request
+      img.src = Hub.state.serverUrl + '/ping?' + Date.now();
+    });
+  }
+
+  async function _fetchJson (path) {
+    // fetch() is blocked by Qt WebEngine LocalContentCanAccessRemoteUrls.
+    // Use JSONP via dynamic <script> injection as a fallback.
+    // The server wraps JSON in a callback: ?cb=XEH_<n>({"key":"val"})
+    return new Promise(function (resolve) {
+      var cbName = 'XEH_cb_' + (Date.now() % 1e9);
+      var script = document.createElement('script');
+      var timer  = setTimeout(function () {
+        cleanup();
+        resolve(null);
+      }, 3000);
+
+      function cleanup () {
+        try { delete window[cbName]; } catch (_) {}
+        if (script.parentNode) script.parentNode.removeChild(script);
+      }
+
+      window[cbName] = function (data) {
+        clearTimeout(timer);
+        cleanup();
+        resolve(data);
+      };
+
+      script.onerror = function () { clearTimeout(timer); cleanup(); resolve(null); };
+      script.src = Hub.state.serverUrl + path +
+        (path.indexOf('?') >= 0 ? '&' : '?') + 'cb=' + cbName;
+      document.head.appendChild(script);
+    });
   }
 
   async function _serverFullRefresh () {
@@ -192,25 +230,20 @@
 
   // ── Server data fetchers ──────────────────────────────────────────────────
 
+  // Expose JSONP helper for other modules (media.js, storage.js, notes.js)
+  Hub.fetchJson = _fetchJson;
+
   async function _fetchSystemFromServer () {
     try {
-      const ctrl = new AbortController();
-      setTimeout(() => ctrl.abort(), 4000);
-      const res  = await fetch(Hub.state.serverUrl + '/system', { signal: ctrl.signal });
-      if (!res.ok) return;
-      const data = await res.json();
-      Hub.renderSystemFromServer(data);
+      const data = await _fetchJson('/system');
+      if (data) Hub.renderSystemFromServer(data);
     } catch (_) { /* ignore */ }
   }
 
   async function _fetchNetworkFromServer () {
     try {
-      const ctrl = new AbortController();
-      setTimeout(() => ctrl.abort(), 4000);
-      const res  = await fetch(Hub.state.serverUrl + '/network', { signal: ctrl.signal });
-      if (!res.ok) return;
-      const data = await res.json();
-      Hub.renderNetworkFromServer(data);
+      const data = await _fetchJson('/network');
+      if (data) Hub.renderNetworkFromServer(data);
     } catch (_) { /* ignore */ }
   }
 

@@ -283,6 +283,30 @@
     if (changed) await Hub.persistEvents();
   };
 
+  function _playReminderSound () {
+    try {
+      const AudioCtx = window.AudioContext || window.webkitAudioContext;
+      if (!AudioCtx) return;
+      const ctx = new AudioCtx();
+      function _beep (freq, startOffset, dur) {
+        const osc = ctx.createOscillator();
+        const g   = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(freq, ctx.currentTime + startOffset);
+        g.gain.setValueAtTime(0, ctx.currentTime + startOffset);
+        g.gain.linearRampToValueAtTime(0.28, ctx.currentTime + startOffset + 0.02);
+        g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + startOffset + dur);
+        osc.connect(g);
+        g.connect(ctx.destination);
+        osc.start(ctx.currentTime + startOffset);
+        osc.stop(ctx.currentTime + startOffset + dur);
+      }
+      _beep(880, 0,    0.35);
+      _beep(660, 0.38, 0.48);
+      setTimeout(function () { try { ctx.close(); } catch (_) {} }, 1500);
+    } catch (_) { /* Web Audio not available in this WebView context */ }
+  }
+
   function _showReminder (event) {
     const fmt  = new Intl.DateTimeFormat(Hub.tr('locale'), { weekday: 'short', hour: '2-digit', minute: '2-digit' });
     const meta = fmt.format(new Date(event.startsAt));
@@ -304,6 +328,8 @@
 
     clearTimeout(_toastTimer);
     _toastTimer = setTimeout(Hub.dismissReminderToast, 14000);
+
+    _playReminderSound();
 
     if ('Notification' in window && Notification.permission === 'granted') {
       try {

@@ -84,43 +84,11 @@ function prepareBuildDirectory() {
   writeFileSync(join(buildDir, "index.html"), createBundledIndex(), "utf8");
 }
 
-// iCUE import dialog expects files inside a subfolder named after the widget ID.
-// After icuewidget package creates the flat zip, we repackage with the correct structure.
-function repackWithSubfolder(zipPath, widgetId) {
-  const manifest = JSON.parse(readFileSync(join(sourceDir, "manifest.json"), "utf8"));
-  const folderId = manifest.id || widgetId;
-
-  const psScript = `
-Add-Type -AssemblyName System.IO.Compression
-Add-Type -AssemblyName System.IO.Compression.FileSystem
-$src = '${zipPath.replace(/\\/g, "\\\\")}'; $tmp = $src + '.tmp'
-$rdr = [System.IO.Compression.ZipFile]::Open($src, 'Read')
-$wtr = [System.IO.Compression.ZipFile]::Open($tmp, 'Create')
-foreach ($e in $rdr.Entries) {
-  $newName = '${folderId}/' + $e.FullName
-  $dst = $wtr.CreateEntry($newName, 'Optimal')
-  $si = $e.Open(); $di = $dst.Open(); $si.CopyTo($di); $si.Close(); $di.Close()
-}
-$rdr.Dispose(); $wtr.Dispose()
-Remove-Item $src -Force; Rename-Item $tmp $src
-Write-Host 'Repackaged with subfolder: ${folderId}/'
-`.trim();
-
-  const result = spawnSync("powershell.exe", ["-NoProfile", "-Command", psScript], {
-    cwd: repoRoot,
-    stdio: "inherit"
-  });
-  if (result.status !== 0) {
-    throw new Error("Repackaging with subfolder structure failed");
-  }
-}
-
 try {
   if (!existsSync(sourceDir)) throw new Error("widget source directory was not found");
   prepareBuildDirectory();
   run("icuewidget", ["validate", buildDir]);
   run("icuewidget", ["package", buildDir, "--output", packageOutput]);
-  repackWithSubfolder(packageOutput, "com.marcimastro98.xenonedgehub");
 } finally {
   if (!process.env.KEEP_ICUE_BUILD) {
     rmSync(buildRoot, { recursive: true, force: true });
