@@ -503,6 +503,31 @@ The `-webkit-` prefix is needed because Qt WebEngine uses a WebKit-derived rende
 
 ---
 
+### 4.9 Qt WebEngine Blocks `fetch()` and `XMLHttpRequest` from Local Widget Pages
+
+**What happens:** iCUE loads widget HTML as a local resource. Qt WebEngine defaults to `LocalContentCanAccessRemoteUrls = false`, which **silently blocks all `fetch()` and `XMLHttpRequest` calls** to any URL — including `http://127.0.0.1:3030` — even with correct CORS headers on the target server. Unlike standard browser CORS behavior, the request is never sent; `fetch()` silently times out with no indication it was blocked rather than unreachable.
+
+**Related server-side finding:** Qt WebEngine also sends `Origin: null` (opaque origin) for requests from local HTML files. If the companion server's CORS validation calls `new URL("null")` to parse that origin, it throws and the server returns 403. Fix: treat `origin === 'null'` as a valid loopback origin.
+
+**Root cause confirmation:** Opening `http://127.0.0.1:3030/status` in standard Chrome returned `{"muted": false}` correctly — the server was running fine. The failure was exclusively inside the widget WebView.
+
+**Workarounds implemented:**
+
+1. **Connectivity probe** — replaced `fetch('/ping')` with an `Image()` subresource load, which uses a different Qt code path and is not subject to the restriction. The server returns a 1×1 transparent GIF at `/ping`.
+2. **Data reads** — replaced all `fetch()` GET calls with **JSONP** (dynamic `<script>` tag injection). The server wraps every JSON response in a callback when `?cb=<name>` is present in the request URL.
+3. **Write/action endpoints** — converted all previously POST-only endpoints to also accept `GET` with query parameters (e.g., `GET /toggle`, `GET /volume/set?level=75`, `GET /events?save=1&data=…`) so JSONP covers the full API surface.
+
+**Server additions required for this workaround:**
+- `/ping` endpoint returning a `1×1` transparent GIF
+- `?cb=<name>` JSONP wrapper on all JSON responses
+- `GET` method support on all action/write endpoints
+- `Origin: null` accepted as a valid loopback origin in CORS validation
+- `Access-Control-Allow-Private-Network: true` header (Chrome 104+ Private Network Access spec requirement)
+
+**Recommendation for Corsair:** Document that `LocalContentCanAccessRemoteUrls = false` blocks `fetch()` / XHR from widget pages and provide an official communication channel for companion-process integrations — either a `LocalFetchProvider` plugin that allows opt-in loopback requests, or document the JSONP pattern as the recommended workaround so developers are not left debugging silent failures.
+
+---
+
 ## 5. Summary Table — SDK Gaps and Feature Requests
 
 | Missing Feature | Impact | Suggested Plugin / Method |
@@ -536,6 +561,8 @@ The `-webkit-` prefix is needed because Qt WebEngine uses a WebKit-derived rende
 | `data-filters` required but undocumented for `media-selector` | Medium — blocks validation | Fixed; needs doc update |
 | Widget folder silently deleted on V4 error | High — no UX feedback | Needs runtime fix from Corsair |
 | `user-select: none` on body disables form input in Qt WebEngine | Medium — all text inputs break silently | Fixed: `user-select: text` on `input, textarea` in CSS |
+| Qt WebEngine blocks `fetch()` / XHR from local pages (`LocalContentCanAccessRemoteUrls = false`) | High — companion server unreachable via all standard HTTP mechanisms | Workaround: Image ping + JSONP + GET-based write endpoints |
+| `Origin: null` from widget pages causes CORS 403 on companion servers | High — all server responses rejected | Fixed: treat `origin === 'null'` as valid loopback origin |
 
 ---
 
