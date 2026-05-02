@@ -1,0 +1,16 @@
+<div class="event-toast" id="event-toast" role="alert" aria-live="assertive">
+  <div class="toast-inner">
+    <div class="toast-icon" aria-hidden="true">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 7v5l3 2"/></svg>
+    </div>
+    <div class="toast-copy">
+      <div class="toast-kicker" id="toast-kicker" data-i18n="reminder">Reminder</div>
+      <div class="toast-title" id="toast-title">Event</div>
+      <div class="toast-meta" id="toast-meta">Now</div>
+    </div>
+    <button class="toast-close" type="button" onclick="dismissReminderToast()" data-i18n-title="close">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>
+  </div>
+  <div class="toast-progress"></div>
+</div>

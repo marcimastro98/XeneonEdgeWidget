@@ -1,0 +1,34 @@
+<div class="day-modal" id="day-modal" role="dialog" aria-modal="true">
+  <div class="day-modal-backdrop" onclick="closeDayModal()"></div>
+  <div class="day-modal-card">
+    <div class="day-modal-header">
+      <div>
+        <div class="day-modal-kicker" data-i18n="agenda">Personal agenda</div>
+        <div class="day-modal-title" id="day-modal-title">--</div>
+      </div>
+      <button class="day-modal-close" type="button" onclick="closeDayModal()" data-i18n-title="close">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="day-modal-events" id="day-modal-events"></div>
+    <div class="day-modal-form">
+      <input class="event-input" id="event-title" type="text" maxlength="120"
+             data-i18n-placeholder="ph_title" placeholder="Event title">
+      <div class="form-row-time">
+        <input class="event-input" id="event-time" type="time" value="09:00">
+        <select class="event-select" id="event-reminder">
+          <option value="0"    data-i18n="reminder_at">At the time</option>
+          <option value="5"    data-i18n="reminder_5">5 min before</option>
+          <option value="15"   data-i18n="reminder_15">15 min before</option>
+          <option value="30"   data-i18n="reminder_30">30 min before</option>
+          <option value="60"   data-i18n="reminder_60">1 hour before</option>
+          <option value="1440" data-i18n="reminder_1440">1 day before</option>
+          <option value="-1"   data-i18n="reminder_none">No reminder</option>
+        </select>
+      </div>
+      <input class="event-input" id="event-notes" type="text" maxlength="160"
+             data-i18n-placeholder="ph_notes" placeholder="Short note">
+      <button class="event-save" type="button" onclick="saveCalendarEvent()" data-i18n="add">Add</button>
+    </div>
+  </div>
+</div>

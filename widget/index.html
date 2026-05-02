@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Xeneon Edge Hub</title>
+  <link rel="icon" type="image/svg+xml" href="resources/icon.svg">
+  <link rel="stylesheet" href="styles/main.css">
+
+  <!-- ── iCUE meta-properties ────────────────────────────────────────────── -->
+
+  <!-- Sensors group -->
+  <meta name="x-icue-property" content="cpuLoadSensor"
+        data-label="tr('CPU Load Sensor')"
+        data-type="sensors-combobox"
+        data-default="plugins.Sensorsdataprovider.getDefaultSensorIdBlock('load')">
+
+  <meta name="x-icue-property" content="cpuTempSensor"
+        data-label="tr('CPU Temperature Sensor')"
+        data-type="sensors-combobox"
+        data-default="plugins.Sensorsdataprovider.getDefaultSensorIdBlock('temperature')">
+
+  <meta name="x-icue-property" content="gpuLoadSensor"
+        data-label="tr('GPU Load Sensor')"
+        data-type="sensors-combobox"
+        data-default="plugins.Sensorsdataprovider.getDefaultSensorIdBlock('load')">
+
+  <meta name="x-icue-property" content="gpuTempSensor"
+        data-label="tr('GPU Temperature Sensor')"
+        data-type="sensors-combobox"
+        data-default="plugins.Sensorsdataprovider.getDefaultSensorIdBlock('temperature')">
+
+  <meta name="x-icue-property" content="ramLoadSensor"
+        data-label="tr('RAM Load Sensor')"
+        data-type="sensors-combobox"
+        data-default="plugins.Sensorsdataprovider.getDefaultSensorIdBlock('load')">
+
+  <meta name="x-icue-property" content="diskTempSensor"
+        data-label="tr('Disk Temperature Sensor')"
+        data-type="sensors-combobox"
+        data-default="plugins.Sensorsdataprovider.getDefaultSensorIdBlock('temperature')">
+
+  <meta name="x-icue-property" content="netUploadSensor"
+        data-label="tr('Network Upload Sensor')"
+        data-type="sensors-combobox"
+        data-default="''">
+
+  <meta name="x-icue-property" content="netDownloadSensor"
+        data-label="tr('Network Download Sensor')"
+        data-type="sensors-combobox"
+        data-default="''">
+
+  <!-- Connection group -->
+  <meta name="x-icue-property" content="serverUrl"
+        data-label="tr('Local Server URL')"
+        data-type="textfield"
+        data-default="'http://localhost:3030'">
+
+  <!-- Behavior group -->
+  <meta name="x-icue-property" content="use24h"
+        data-label="tr('24-Hour Clock')"
+        data-type="switch"
+        data-default="true">
+
+  <meta name="x-icue-property" content="showSeconds"
+        data-label="tr('Show Seconds')"
+        data-type="switch"
+        data-default="false">
+
+  <!-- Appearance group (LAST — per spec §2.5) -->
+  <meta name="x-icue-property" content="backgroundMedia"
+        data-label="tr('Background Image')"
+        data-type="media-selector"
+        data-filters="['*.jpg', '*.jpeg', '*.png', '*.gif', '*.bmp', '*.webp', '*.mp4', '*.webm', '*.mov']"
+        data-default="''">
+
+  <meta name="x-icue-property" content="bgBrightness"
+        data-label="tr('Background Brightness')"
+        data-type="slider"
+        data-default="100"
+        data-min="0"
+        data-max="100"
+        data-step="1">
+
+  <meta name="x-icue-property" content="glassBlur"
+        data-label="tr('Glass Blur')"
+        data-type="slider"
+        data-default="0"
+        data-min="0"
+        data-max="30"
+        data-step="1">
+
+  <meta name="x-icue-property" content="transparency"
+        data-label="tr('Transparency')"
+        data-type="slider"
+        data-default="100"
+        data-min="0"
+        data-max="100"
+        data-step="1">
+
+  <meta name="x-icue-property" content="textColor"
+        data-label="tr('Text Color')"
+        data-type="color"
+        data-default="'#f0f3f1'">
+
+  <meta name="x-icue-property" content="accentColor"
+        data-label="tr('Accent Color')"
+        data-type="color"
+        data-default="'#1ed760'">
+
+  <meta name="x-icue-property" content="backgroundColor"
+        data-label="tr('Background Color')"
+        data-type="color"
+        data-default="'#070808'">
+
+  <!-- ── Property groups ──────────────────────────────────────────────────── -->
+  <script type="application/json" id="x-icue-groups">
+  [
+    {
+      "title": "tr('Sensors')",
+      "properties": [
+        "cpuLoadSensor", "cpuTempSensor",
+        "gpuLoadSensor", "gpuTempSensor",
+        "ramLoadSensor", "diskTempSensor",
+        "netUploadSensor", "netDownloadSensor"
+      ]
+    },
+    {
+      "title": "tr('Connection')",
+      "properties": ["serverUrl"]
+    },
+    {
+      "title": "tr('Behavior')",
+      "properties": ["use24h", "showSeconds"]
+    },
+    {
+      "title": "tr('Widget Personalization')",
+      "properties": [
+        "backgroundMedia", "bgBrightness", "glassBlur", "transparency",
+        "textColor", "accentColor", "backgroundColor"
+      ]
+    }
+  ]
+  </script>
+
+  <!-- ── MediaViewer — inlined to avoid iCUE file:// script-loading restrictions ── -->
+  <style>
+    .position-container { position: absolute; transform-origin: top left; }
+    .scale-container    { transform-origin: top left; }
+    .rotation-container { transform-origin: center center; }
+    .rotation-container img,
+    .rotation-container video { display: block; object-fit: contain; }
+  </style>
+  <script>
+    class MediaViewer {
+      constructor(options) {
+        options = options || {};
+        this.container = options.container;
+        this.onMediaLoaded = options.onMediaLoaded || function() {};
+        this.onMediaError  = options.onMediaError  || function() {};
+        this.debug = options.debug || false;
+        this.positionContainer = null; this.scaleContainer = null;
+        this.rotationContainer = null; this.mediaElement   = null;
+        this.currentMediaPath  = null;
+        this.supportedImageFormats = ['jpg','jpeg','png','gif','bmp','webp','svg','ico'];
+        this.supportedVideoFormats = ['mp4','webm','ogg','mov','avi','mkv'];
+        if (!this.container) throw new Error('MediaViewer: container is required');
+      }
+      getFileExtension(p) { return p.split('.').pop().toLowerCase(); }
+      isImageFile(e) { return this.supportedImageFormats.includes(e); }
+      isVideoFile(e) { return this.supportedVideoFormats.includes(e); }
+      log(...a)   { if (this.debug) console.log('[MediaViewer]', ...a); }
+      warn(...a)  { if (this.debug) console.warn('[MediaViewer]', ...a); }
+      error(...a) { console.error('[MediaViewer]', ...a); }
+      createImageElement(filePath) {
+        const img = document.createElement('img');
+        img.src     = filePath;
+        img.onerror = () => { this.error('Failed to load image:', filePath); this.onMediaError(new Error('Failed to load image: ' + filePath)); };
+        img.onload  = () => { this.log('Image loaded:', filePath); this.onMediaLoaded(img); };
+        return img;
+      }
+      createVideoElement(filePath) {
+        const video = document.createElement('video');
+        video.controls = false; video.autoplay = true; video.loop = true;
+        video.muted = true; video.playsInline = true;
+        video.addEventListener('loadeddata', () => {
+          video.play().then(() => this.onMediaLoaded(video))
+                      .catch(e => { this.error('Error playing video:', e); this.onMediaError(e); });
+        });
+        video.addEventListener('error', e => {
+          this.error('Video error:', e);
+          this.onMediaError(new Error('Video error: ' + ((video.error && video.error.message) || 'Unknown')));
+        });
+        video.src = filePath;
+        return video;
+      }
+      createMediaElement(filePath) {
+        const ext = this.getFileExtension(filePath);
+        if (this.isImageFile(ext)) return this.createImageElement(filePath);
+        if (this.isVideoFile(ext)) return this.createVideoElement(filePath);
+        this.error('Unsupported format:', ext);
+        this.onMediaError(new Error('Unsupported format: ' + ext));
+        return null;
+      }
+      createContainers() {
+        this.positionContainer = document.createElement('div'); this.positionContainer.className = 'position-container';
+        this.scaleContainer    = document.createElement('div'); this.scaleContainer.className    = 'scale-container';
+        this.rotationContainer = document.createElement('div'); this.rotationContainer.className = 'rotation-container';
+        this.rotationContainer.appendChild(this.mediaElement);
+        this.scaleContainer.appendChild(this.rotationContainer);
+        this.positionContainer.appendChild(this.scaleContainer);
+        return this.positionContainer;
+      }
+      applyTransform(params) {
+        params = params || {};
+        if (!this.positionContainer) return;
+        const bw  = params.baseWidth  || 100;
+        const bh  = params.baseHeight || 100;
+        const sc  = params.scale !== undefined ? params.scale : 1;
+        const px  = params.positionX || 0;
+        const py  = params.positionY || 0;
+        const rot = params.angle     || 0;
+        const minScale = Math.min(this.container.clientWidth / bw, this.container.clientHeight / bh);
+        this.positionContainer.style.transform = 'translate(' + (px * minScale) + 'px, ' + (py * minScale) + 'px)';
+        this.scaleContainer.style.transform    = 'scale(' + (sc * minScale) + ')';
+        this.rotationContainer.style.transform = 'rotate(' + rot + 'deg)';
+      }
+      loadMedia(params) {
+        params = params || {};
+        const filePath = params.path;
+        if (!filePath) { this.clear(); return; }
+        const decoded = decodeURIComponent(filePath);
+        if (this.currentMediaPath === decoded) { this.applyTransform(params); return; }
+        this.clear();
+        this.mediaElement = this.createMediaElement(decoded);
+        if (!this.mediaElement) return;
+        this.container.appendChild(this.createContainers());
+        this.container.style.visibility = 'visible';
+        this.applyTransform(params);
+        this.currentMediaPath = decoded;
+      }
+      clear() {
+        this.container.innerHTML = '';
+        this.container.style.visibility = 'hidden';
+        this.positionContainer = this.scaleContainer = this.rotationContainer =
+          this.mediaElement = this.currentMediaPath = null;
+      }
+      destroy() { this.clear(); this.container = this.onMediaLoaded = this.onMediaError = null; }
+    }
+  </script>
+</head>
+<body>
+  <!-- ── Background layer (MediaViewer mounts here; position:absolute in CSS) -->
+  <div class="widget-background" aria-hidden="true">
+    <div id="media-background"></div>
+  </div>
+
+  <!-- ── Script load order (modules must load before loader.js / app.js) ──── -->
+  <!-- 1. Official Corsair plugin wrappers -->
+  <script src="common/plugins/IcueWidgetApiWrapper.js"></script>
+  <script src="common/plugins/SimpleSensorApiWrapper.js"></script>
+  <script src="common/plugins/SimpleMediaApiWrapper.js"></script>
+
+  <!-- 2. Project modules (dependency order: state first, app last) -->
+  <script src="modules/state.js"></script>
+  <script src="modules/i18n.js"></script>
+  <script src="modules/storage.js"></script>
+  <script src="modules/ui.js"></script>
+  <script src="modules/clock.js"></script>
+  <script src="modules/calendar.js"></script>
+  <script src="modules/notes.js"></script>
+  <script src="modules/sensors.js"></script>
+  <script src="modules/media.js"></script>
+
+  <!-- ── Mount points + loader.js — must be consecutive for the packager ──── -->
+  <div id="xenonedge-root"></div>
+  <div id="xenonedge-overlays"></div>
+  <script src="modules/components/loader.js"></script>
+</body>
+</html>

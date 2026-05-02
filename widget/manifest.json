@@ -1,0 +1,17 @@
+{
+  "author": "marcimastro98",
+  "id": "com.marcimastro98.xenonedgehub",
+  "name": "Xeneon Edge Hub",
+  "description": "All-in-one dashboard for the Xeneon Edge: system stats, media, mic, calendar and more.",
+  "interactive": true,
+  "version": "1.0.0",
+  "preview_icon": "resources/icon.svg",
+  "min_framework_version": "1.0.0",
+  "os": [{ "platform": "windows" }],
+  "supported_devices": [{ "type": "dashboard_lcd" }],
+  "required_plugins": [
+    "widgetbuilder.sensorsdataprovider:Sensors:1.0",
+    "widgetbuilder.mediadataprovider:Media:1.0",
+    "widgetbuilder.linkprovider:Url:1.0"
+  ]
+}

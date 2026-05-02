@@ -1,0 +1,113 @@
+<section class="panel media-panel" id="media-panel">
+  <!-- absolute background layers (z-index 0-1) -->
+  <div class="media-bg" id="media-bg"></div>
+  <div class="media-overlay"></div>
+
+  <!-- topbar row (z-index 2, grid row 1) -->
+  <div class="media-header">
+    <button class="calendar-entry" type="button" onclick="showCalendar(true)"
+            data-i18n-title="open_calendar">
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <rect x="3" y="4" width="18" height="18" rx="2"/>
+        <path d="M16 2v4M8 2v4M3 10h18"/>
+      </svg>
+      <span data-i18n="open_calendar">Calendar</span>
+    </button>
+  </div>
+
+  <!-- media view (grid row 2 — hidden in calendar-mode via CSS) -->
+  <div class="media-content-area">
+    <div class="media-art" id="media-art">
+      <div class="media-placeholder">
+        <div class="ph-eq"><span></span><span></span><span></span><span></span><span></span></div>
+        <div class="ph-label">No Media</div>
+      </div>
+    </div>
+
+    <div class="media-content">
+      <div class="media-app-row">
+        <div class="app-pill">
+          <span class="app-indicator"></span>
+          <span id="media-app">Media</span>
+        </div>
+      </div>
+      <div>
+        <div class="media-title" id="media-title" data-i18n="media_empty_title">Nothing playing</div>
+        <div class="media-artist" id="media-artist" data-i18n="media_empty_sub">Spotify, YouTube and others will appear here</div>
+      </div>
+      <div class="media-actions">
+        <button class="control-btn" type="button" onclick="mediaAction('previous')" data-i18n-title="tip_prev">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6h2v12H6V6Zm3.5 6 8.5 6V6l-8.5 6Z"/></svg>
+        </button>
+        <button class="control-btn primary" type="button" onclick="mediaAction('playpause')" data-i18n-title="tip_play">
+          <svg id="play-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7L8 5Z"/></svg>
+          <svg id="pause-icon" viewBox="0 0 24 24" aria-hidden="true" style="display:none"><path d="M7 5h4v14H7V5Zm6 0h4v14h-4V5Z"/></svg>
+        </button>
+        <button class="control-btn" type="button" onclick="mediaAction('next')" data-i18n-title="tip_next">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 6h2v12h-2V6ZM6 18l8.5-6L6 6v12Z"/></svg>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- calendar view (grid row 2 — shown in calendar-mode via CSS) -->
+  <div class="calendar-view" id="calendar-view">
+    <div class="calendar-top">
+      <div class="calendar-mini-player" id="calendar-mini-player"
+           role="button" tabindex="0"
+           onclick="showCalendar(false)"
+           onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();showCalendar(false)}">
+        <div class="mini-now">
+          <div class="mini-cover" id="mini-media-cover"><span class="mini-pulse"></span></div>
+          <div>
+            <div class="mini-title" id="mini-media-title" data-i18n="now_playing">Now playing</div>
+            <div class="mini-sub" id="mini-media-sub" data-i18n="active_player">Active player</div>
+          </div>
+        </div>
+        <div class="mini-actions">
+          <button class="mini-action" type="button"
+                  onclick="event.stopPropagation();mediaAction('previous')"
+                  data-i18n-title="tip_prev">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6h2v12H6V6Zm3.5 6 8.5 6V6l-8.5 6Z"/></svg>
+          </button>
+          <button class="mini-action" type="button"
+                  onclick="event.stopPropagation();mediaAction('playpause')"
+                  data-i18n-title="tip_play">
+            <svg id="mini-play-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7L8 5Z"/></svg>
+            <svg id="mini-pause-icon" viewBox="0 0 24 24" aria-hidden="true" style="display:none"><path d="M7 5h4v14H7V5Zm6 0h4v14h-4V5Z"/></svg>
+          </button>
+          <button class="mini-action" type="button"
+                  onclick="event.stopPropagation();mediaAction('next')"
+                  data-i18n-title="tip_next">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 6h2v12h-2V6ZM6 18l8.5-6L6 6v12Z"/></svg>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div class="calendar-card">
+      <div class="calendar-nav">
+        <div class="calendar-month" id="calendar-month">--</div>
+        <div class="calendar-nav-actions">
+          <button class="calendar-arrow" type="button" onclick="moveCalendarMonth(-1)"
+                  aria-label="Previous month">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><polyline points="15 6 9 12 15 18"/></svg>
+          </button>
+          <button class="calendar-arrow" type="button" onclick="jumpCalendarToday()"
+                  id="calendar-today-btn" data-i18n="today">Today</button>
+          <button class="calendar-arrow" type="button" onclick="moveCalendarMonth(1)"
+                  aria-label="Next month">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><polyline points="9 6 15 12 9 18"/></svg>
+          </button>
+        </div>
+      </div>
+      <div class="calendar-weekdays" id="calendar-weekdays"></div>
+      <div class="calendar-days" id="calendar-days"></div>
+    </div>
+
+    <div class="upcoming-block">
+      <div class="upcoming-title" data-i18n="upcoming">Upcoming</div>
+      <div class="upcoming-list" id="upcoming-list"></div>
+    </div>
+  </div>
+</section>
